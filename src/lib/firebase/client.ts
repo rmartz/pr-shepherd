@@ -1,5 +1,4 @@
 import { initializeApp, getApps, type FirebaseApp } from "firebase/app";
-import { getAuth, type Auth } from "firebase/auth";
 import { getDatabase, type Database } from "firebase/database";
 import { getFirestore, type Firestore } from "firebase/firestore";
 
@@ -16,10 +15,6 @@ export function getClientApp(): FirebaseApp {
     getApps().find((a) => a.name === "[DEFAULT]") ??
     initializeApp(firebaseConfig)
   );
-}
-
-export function getClientAuth(): Auth {
-  return getAuth(getClientApp());
 }
 
 // Realtime Database accessor — use when RTDB is the project's data store.
