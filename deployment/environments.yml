@@ -1,0 +1,16 @@
+# Declares which environments are active for this project.
+#
+# Scripts will error unless all listed environments have a corresponding
+# deployment/{environment}.yml config file. This prevents accidental
+# misconfiguration where a repo expects separate preview and production
+# environments but is operating with only one.
+#
+# Set single_environment: true ONLY when this project intentionally uses
+# a single environment (e.g. ephemeral data with no meaningful preview/prod
+# distinction). The default is false — both environments must be present.
+
+active:
+  - preview
+  - production
+
+single_environment: false

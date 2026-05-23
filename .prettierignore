@@ -1,0 +1,7 @@
+node_modules
+dist
+.next
+.claude
+src/components/ui
+pnpm-lock.yaml
+.git-worktrees

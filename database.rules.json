@@ -1,0 +1,15 @@
+{
+  "rules": {
+    "$collection": {
+      "$id": {
+        "public": {
+          ".read": "auth != null"
+        },
+        "private": {
+          ".read": "auth != null && auth.uid === $id",
+          ".write": "auth != null && auth.uid === $id"
+        }
+      }
+    }
+  }
+}

@@ -1,0 +1,13 @@
+node_modules/
+dist/
+.next/
+package-lock.json
+tsconfig.tsbuildinfo
+.partykit/
+.env
+.env.local
+.env*.local
+.env.sentry-build-plugin
+storybook-static
+next-env.d.ts
+.git-worktrees/

@@ -1,0 +1,16 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Default deny — no access unless explicitly granted below.
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    // Scaffold: uid-scoped user data.
+    // Adapt the collection names and access rules to your data model.
+    // match /users/{userId}/{document=**} {
+    //   allow read: if request.auth != null && request.auth.uid == userId;
+    //   allow write: if request.auth != null && request.auth.uid == userId;
+    // }
+  }
+}
