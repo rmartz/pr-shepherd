@@ -1,5 +1,9 @@
 # Code Standards
 
+## Project Overview
+
+PR Shepherd is a locally-hosted Node.js daemon that drives PRs through review/fix/merge workflows using Claude. The engine lives in `src/engine/`; step executors in `src/steps/`; data adapters in `src/db/`; workflow YAML definitions in `workflows/`. See [ARCHITECTURE.md](ARCHITECTURE.md) for the full layout and the [vision document (#1)](https://github.com/rmartz/pr-shepherd/issues/1) for the design rationale.
+
 ## Package Manager
 
 - Always use `pnpm`. Never `npm` or `yarn`.
@@ -7,7 +11,7 @@
 ## Common Commands
 
 ```bash
-pnpm dev              # Start dev server
+pnpm dev              # Start dev server (UI only, no engine)
 pnpm build            # Production build
 pnpm lint             # Lint
 pnpm format           # Format
@@ -19,6 +23,8 @@ pnpm run env:pull     # Pull .env.local from Vercel
 pnpm run env:validate # Validate deployment config files against schema
 pnpm run secrets-check # Config validation + gitleaks scan (also runs pre-commit)
 ```
+
+The full daemon (engine + UI) is launched via `shepherd start` once Epic 6 (CLI) lands.
 
 ## Worktree Setup
 
@@ -50,8 +56,8 @@ Public (non-secret) environment config lives in `deployment/{env}.yml` and is va
 - Add a barrel `index.ts` when a component or module directory exposes a public API or already
   follows a barrel pattern; do not require one for every directory (e.g. ShadCN-generated
   `src/components/ui/` has no barrel by convention).
-- Use named exports, not default exports (except for Next.js pages, Redux slices, and
-  Storybook story files, where the only allowed default export is the required
+- Use named exports, not default exports (except for Next.js pages and Storybook
+  story files, where the only allowed default export is the required
   `export default meta`; stories and components must remain named exports).
 
 ## Code Conventions
@@ -66,8 +72,9 @@ Public (non-secret) environment config lives in `deployment/{env}.yml` and is va
 
 ## Naming Conventions
 
-- **Firebase schema conversions**: `{domain}ToFirebase()` / `firebaseTo{Domain}()`.
-- **Redux slices**: File suffix `-slice.ts`.
+- **Firestore schema conversions**: `{domain}ToFirestore()` / `firestoreTo{Domain}()`.
+- **Workflow definitions**: One YAML file per workflow under `workflows/`, named after the workflow ID (e.g., `workflows/base-pr.yaml`).
+- **Step executors**: One file per step type under `src/steps/`, camelCased (e.g., `claudeSkill.ts`, `waitCi.ts`, `githubApi.ts`).
 - **Presentational views**: Components extracted for testability use the `{Component}View` suffix.
 
 ## User-Facing Text
@@ -110,7 +117,7 @@ Public (non-secret) environment config lives in `deployment/{env}.yml` and is va
 
 - Story files are co-located with their component: `ComponentName.stories.tsx`.
 - When adding or modifying a UI component, add or update its Storybook story to cover key visual states.
-- Stories should use mock data fixtures — never import from Firebase or depend on runtime providers (QueryClient, Redux store, Next.js router).
+- Stories should use mock data fixtures — never import from Firestore or depend on runtime providers (Zustand store, Next.js router, SSE event source).
 - Components that are too hook-dependent to render in isolation should use a presentational split: extract rendering into a `ComponentNameView` that accepts callbacks, and keep the original as a thin wrapper that wires up hooks.
 
 ## Component Tests
@@ -141,7 +148,7 @@ Public (non-secret) environment config lives in `deployment/{env}.yml` and is va
 
 ## Git Conventions
 
-- Branch names: lowercase with hyphens, prefixed by type: `feature/`, `chore/`, `refactor/`, `docs/`, with issue number suffix (e.g., `feature/user-profile-42`).
+- Branch names: lowercase with hyphens. For issue-tracked work use the `/implement` skill convention `feat/issue-<number>-<slug>` (e.g., `feat/issue-42-add-workflow-loader`). For non-issue work prefix with `chore/`, `refactor/`, or `docs/` followed by a short description.
 - Commit messages: imperative verbs (Add, Implement, Fix, Update, Extract, Remove). No `feat:`/`fix:` prefixes.
 - PR titles must follow Conventional Commits format: `<type>: description` or `<type>(<scope>): description`. Valid types: `feat`, `fix`, `docs`, `chore`, `refactor`, `test`, `style`, `perf`, `ci`, `build`, `revert`. A `!` suffix is allowed before the colon to denote breaking changes (e.g., `feat!: remove legacy auth`). This is enforced by CI.
 - PR descriptions must use `Closes #123`, `Fixes #123`, or `Resolves #123` to trigger GitHub's automatic issue close on merge. Phrases like "Addresses #123" or "Related to #123" do NOT trigger auto-close.

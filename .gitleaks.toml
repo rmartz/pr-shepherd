@@ -1,4 +1,4 @@
-# gitleaks configuration for firebase-nextjs-template
+# gitleaks configuration for pr-shepherd
 # Extends the base ruleset from vercel-deploy-scripts (Firebase + Vercel patterns).
 # Only project-specific allowlists belong below.
 
