@@ -11,3 +11,5 @@ tsconfig.tsbuildinfo
 storybook-static
 next-env.d.ts
 .git-worktrees/
+config.yaml
+workflows/*.local.yaml
