@@ -12,11 +12,12 @@ rules_version = '2';
 // - UI writes:         denied (UI is read-only by design)
 // - Any other path:    deny-all default
 //
-// The auth requirement on reads exists so the deployed UI can gate access
-// behind whatever auth provider it integrates with (Vercel password
-// protection, OAuth, etc.). Local-only operators using the UI against the
-// emulator can run unauthenticated by setting auth bypass in the emulator
-// config — the rules themselves enforce auth in production.
+// The auth requirement on reads exists so the deployed UI gates access
+// behind Firebase Authentication. Firestore rules evaluate `request.auth`
+// exclusively from Firebase Auth tokens — edge-level mechanisms such as
+// Vercel password protection do not populate this field and cannot satisfy
+// the rule. Local operators using the UI against the emulator can bypass
+// auth by configuring the Auth emulator accordingly.
 
 service cloud.firestore {
   match /databases/{database}/documents {
