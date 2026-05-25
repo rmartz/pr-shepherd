@@ -22,13 +22,16 @@ shepherd start                        # Full daemon (engine + UI)
 
 ## Development Workflow
 
-1. Create a branch from `main` using the convention used by the `/implement` skill:
+1. Create a branch from `main` following the project naming convention. The pattern depends on whether the work is tied to a GitHub issue:
 
    ```
-   feat/issue-<number>-<slug>
+   feat/issue-<number>-<slug>         # issue-tracked work (matches the /implement skill)
+   chore/<short-description>          # non-issue maintenance
+   refactor/<short-description>       # non-issue refactoring
+   docs/<short-description>           # non-issue documentation
    ```
 
-   `<number>` is the GitHub issue number; `<slug>` is the lowercased, hyphenated issue title truncated to ~40 characters. For non-issue work, prefix with `chore/`, `refactor/`, or `docs/` followed by a short description.
+   For issue-tracked work, `<number>` is the GitHub issue number and `<slug>` is the lowercased, hyphenated issue title truncated to ~40 characters.
 
 2. Make your changes following the conventions in [AGENTS.md](AGENTS.md).
 
