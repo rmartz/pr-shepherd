@@ -1,24 +1,27 @@
-# Firebase + Next.js Template
+# PR Shepherd
 
-A template repository for building Next.js applications with Firebase, deployed on Vercel. Includes opinionated tooling for testing, linting, formatting, component development, and CI/CD.
+A locally-hosted, low-weight daemon that automates the full PR review → fix → merge lifecycle across multiple repositories using Claude, backed by a reactive web UI for monitoring workflow runs.
+
+PR Shepherd replaces the "run delegate in a loop" model with a durable, event-driven workflow engine. Claude invocations become discrete, retryable step instances whose inputs, outputs, and timing are stored persistently. A Next.js UI exposes the full run history in real time.
+
+For the full design rationale and architecture details, see the [vision document](https://github.com/rmartz/pr-shepherd/issues/1).
 
 ## Stack
 
-| Layer           | Technology                                                                                                              | Purpose                                        |
-| --------------- | ----------------------------------------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| Framework       | [Next.js](https://nextjs.org/) (App Router)                                                                             | Fullstack React with SSR/API routes            |
-| Language        | TypeScript (strict mode)                                                                                                | Type safety throughout                         |
-| Package Manager | [pnpm](https://pnpm.io/)                                                                                                | Fast, disk-efficient dependency management     |
-| UI Components   | [ShadCN UI](https://ui.shadcn.com/) + [Tailwind CSS](https://tailwindcss.com/)                                          | Composable, accessible component primitives    |
-| State (server)  | [TanStack Query](https://tanstack.com/query)                                                                            | Server state caching, polling, invalidation    |
-| State (client)  | [Redux Toolkit](https://redux-toolkit.js.org/)                                                                          | Local UI state                                 |
-| Database        | [Firebase Realtime Database](https://firebase.google.com/docs/database)                                                 | Persistent storage with real-time push         |
-| Auth            | Firebase Admin SDK (server)                                                                                             | Session-based auth via API routes              |
-| Hosting         | [Vercel](https://vercel.com/)                                                                                           | Deployment, preview URLs, edge functions       |
-| Testing         | [Vitest](https://vitest.dev/) + [@testing-library/react](https://testing-library.com/docs/react-testing-library/intro/) | Unit, component, and integration tests         |
-| Visual Testing  | [Storybook](https://storybook.js.org/)                                                                                  | Component development and visual documentation |
-| CI/CD           | GitHub Actions                                                                                                          | Lint, format, test, build on every PR          |
-| Monitoring      | [Sentry](https://sentry.io/)                                                                                            | Error tracking (client + server + edge)        |
+| Layer           | Technology                                                                                                              | Purpose                                                  |
+| --------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
+| Runtime         | [Node.js](https://nodejs.org/) 24 LTS                                                                                   | First-class `child_process` for the Claude CLI           |
+| Language        | TypeScript (strict mode)                                                                                                | Schema safety across DB ↔ engine ↔ API boundary          |
+| Package Manager | [pnpm](https://pnpm.io/)                                                                                                | Fast, disk-efficient dependency management               |
+| Data store      | Hosted Firestore (default), Firebase Emulator, or RxDB + LevelDB                                                        | Adapter-agnostic; chosen per `config.yaml`               |
+| Web framework   | [Next.js](https://nextjs.org/) (App Router, custom server)                                                              | UI views and API route handlers                          |
+| UI components   | [ShadCN UI](https://ui.shadcn.com/) + [Tailwind CSS](https://tailwindcss.com/)                                          | Composable, accessible component primitives              |
+| UI state        | Zustand + Server-Sent Events                                                                                            | Reactive run/step updates without polling                |
+| CLI             | `commander`                                                                                                             | Single `shepherd` binary for start / status / inspection |
+| Testing         | [Vitest](https://vitest.dev/) + [@testing-library/react](https://testing-library.com/docs/react-testing-library/intro/) | Unit, component, and integration tests                   |
+| Visual testing  | [Storybook](https://storybook.js.org/)                                                                                  | Component development and visual documentation           |
+| Monitoring      | [Sentry](https://sentry.io/)                                                                                            | Daemon error tracking                                    |
+| CI/CD           | GitHub Actions                                                                                                          | Lint, format, test, build on every PR                    |
 
 ## Getting Started
 
@@ -26,34 +29,39 @@ A template repository for building Next.js applications with Firebase, deployed 
 
 - [Node.js](https://nodejs.org/) v24+
 - [pnpm](https://pnpm.io/) v10+
-- A [Firebase project](https://console.firebase.google.com/) with Realtime Database enabled
-- A [Vercel account](https://vercel.com/) (for deployment)
+- A [Firebase project](https://console.firebase.google.com/) with Firestore enabled — the default data-store adapter. Alternatives are documented in [ARCHITECTURE.md](ARCHITECTURE.md#data-store).
+- A GitHub personal access token authorized via the [`gh` CLI](https://cli.github.com/) for the repos the daemon will watch.
+- The [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) installed and authenticated — the daemon spawns it as a subprocess for `claude_skill` steps.
 
-### Create a New Project
+### Install
 
-1. Click **"Use this template"** on GitHub to create a new repository
-2. Clone your new repository
-3. Install dependencies:
+1. Clone the repository.
+2. Install dependencies:
    ```bash
    pnpm install
    ```
-4. Copy the environment template and fill in your Firebase credentials:
+3. Copy the environment template and fill in your Firebase credentials:
    ```bash
    cp .env.example .env.local
    ```
-5. Start the development server:
+4. Copy the daemon config example and edit it to declare which repos to watch:
    ```bash
-   pnpm dev
+   cp config.example.yaml config.yaml
    ```
+   See [ARCHITECTURE.md](ARCHITECTURE.md#configuration) for the full config schema.
 
-### Environment Variables
+### Run
 
-See [`.env.example`](.env.example) for the full list of required and optional environment variables.
+```bash
+shepherd start
+```
+
+This boots the daemon, starts the Next.js server, and opens the UI at `http://localhost:3847`. The daemon polls GitHub for new PRs in the configured repos and enrolls them in their assigned workflow.
 
 ## Common Commands
 
 ```bash
-pnpm dev              # Start dev server
+pnpm dev              # Start dev server (UI only, no engine)
 pnpm build            # Production build
 pnpm lint             # Lint with ESLint
 pnpm format           # Format with Prettier
@@ -62,98 +70,26 @@ pnpm test             # Run tests with Vitest
 pnpm tsc              # Type check
 pnpm storybook        # Start Storybook dev server (port 6006)
 pnpm build-storybook  # Build static Storybook
-pnpm run env:pull     # Pull .env.local from Vercel (replaces manual cp .env.example)
+pnpm run env:pull     # Pull .env.local from Vercel
 pnpm run env:validate # Validate deployment config files against schema
 pnpm run secrets-check # Run config validation + gitleaks scan (also runs on every commit)
 ```
 
-## Project Structure
+## Configuration
 
-```
-project-root/
-├── src/
-│   ├── app/                    # Next.js App Router pages and API routes
-│   ├── components/
-│   │   ├── ui/                 # ShadCN UI primitives (auto-generated)
-│   │   ├── {feature}/          # Feature-specific components with co-located stories and tests
-│   │   └── {shared}/           # Shared components
-│   ├── lib/
-│   │   ├── firebase/           # Firebase Admin + client SDK wrappers
-│   │   ├── types/              # Core domain types (barrel-exported)
-│   │   └── utils.ts            # Shared utility functions
-│   ├── server/
-│   │   ├── types/              # API response types
-│   │   └── utils/              # Server-only helpers
-│   ├── services/               # Data access layer (Firebase-backed)
-│   ├── hooks/                  # Custom React hooks (barrel-exported)
-│   ├── store/                  # Redux Toolkit slices
-│   └── test-setup/             # Vitest setup files
-├── deployment/
-│   ├── schema.yml              # Allowlist schema for public config keys
-│   ├── environments.yml        # Active environment list
-│   ├── preview.yml             # Public env config for preview (staging)
-│   └── production.yml          # Public env config for production
-├── scripts/
-│   ├── validate-config.mjs     # Validates deployment YAMLs against schema
-│   └── update-config.sh        # Update a deployment YAML (optionally sync to Vercel)
-├── .storybook/                 # Storybook configuration
-├── .github/
-│   ├── actions/setup/          # Composite action: pnpm + Node.js + install
-│   └── workflows/              # CI workflows
-├── docs/                       # Feature documentation
-└── ...config files
-```
+PR Shepherd is configured by two files:
+
+- **`config.yaml`** (gitignored) — operator config: which repos to watch, concurrency limits, polling intervals, data-store adapter. See [`config.example.yaml`](config.example.yaml) for the schema.
+- **`workflows/*.yaml`** — workflow definitions: named steps and routing rules. Hot-reloaded on change. See `workflows/base-pr.yaml` and `workflows/dependabot-pr.yaml` for the bundled defaults.
+
+Secrets (Firebase service account, Sentry token) live in `.env.local` and are never committed.
 
 ## Documentation
 
-- [ARCHITECTURE.md](ARCHITECTURE.md) — Technical decisions, patterns, and infrastructure
-- [AGENTS.md](AGENTS.md) — Code standards and conventions for AI-assisted development
-- [CONTRIBUTING.md](CONTRIBUTING.md) — How to contribute to projects built from this template
-
-## Deployment
-
-### Vercel
-
-1. Import your repository in the [Vercel dashboard](https://vercel.com/new)
-2. Add all environment variables from `.env.example`
-3. Deploy — Vercel handles preview deployments on PRs and production deployments on merge to `main`
-
-### Environment Configuration
-
-Public, non-secret environment config (Firebase project IDs, Sentry org/project, `NEXT_PUBLIC_*` keys) lives in `deployment/{env}.yml` and is validated against `deployment/schema.yml` on every commit and in CI. Secrets never go in these files.
-
-To update a public config value and sync it to Vercel:
-
-```bash
-scripts/update-config.sh --env=preview NEXT_PUBLIC_FIREBASE_PROJECT_ID=my-project-id
-# or from a Firebase console JSON download:
-scripts/update-config.sh --env=preview --firebase-config=~/Downloads/firebase-config.json
-# to also push to Vercel immediately:
-scripts/update-config.sh --env=preview --firebase-config=~/Downloads/firebase-config.json --sync
-# to push current YAML values to Vercel without modifying YAML:
-pnpm exec sync-env --env=preview
-```
-
-### Secret Rotation
-
-To rotate all secrets (Firebase service account, Sentry token) with zero downtime:
-
-```bash
-# Prereqs: gcloud auth login && pnpm exec vercel login
-# SENTRY_AUTH_TOKEN must be set in the shell environment when Sentry is configured
-pnpm exec sync-env --rotate-keys --env=preview
-```
-
-Creates the new credential, pushes it to Vercel, redeploys, waits for a healthy response, then decommissions the old one. No master rotation keys are stored in Vercel. Use `--init` on a fresh project to bootstrap secrets for the first time.
-
-### GitHub Actions
-
-CI runs automatically on every PR with four parallel checks: tests, lint, format, and build. See [`.github/workflows/ci-actions.yml`](.github/workflows/ci-actions.yml).
-
-Additional workflows:
-
-- **Secret Scan** — Runs gitleaks and validates deployment config on every PR and push to `main`
-- **Claude Code** — Enables `@claude` mentions in issues and PRs (requires `ANTHROPIC_API_KEY` secret)
+- [ARCHITECTURE.md](ARCHITECTURE.md) — Technical decisions, data model, engine, data-store options.
+- [AGENTS.md](AGENTS.md) — Code standards and conventions for AI-assisted development.
+- [CONTRIBUTING.md](CONTRIBUTING.md) — Branch naming, commit conventions, PR workflow.
+- [Vision document (issue #1)](https://github.com/rmartz/pr-shepherd/issues/1) — Full design rationale, open questions, success criteria.
 
 ## License
 

@@ -1,7 +1,7 @@
 {
-  "name": "firebase-nextjs-template",
+  "name": "pr-shepherd",
   "version": "0.1.0",
-  "description": "Template repository for Next.js projects built on Firebase",
+  "description": "Locally-hosted daemon that automates the full PR review → fix → merge lifecycle across repositories using Claude, backed by a reactive web UI for monitoring workflow runs.",
   "private": true,
   "type": "module",
   "packageManager": "pnpm@10.30.3",
@@ -17,7 +17,6 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "prepare": "husky",
-    "emulator": "firebase emulators:start",
     "env:pull": "generate-local-env",
     "env:validate": "node scripts/validate-config.mjs",
     "secrets-check": "node scripts/validate-config.mjs && secrets-check --config .gitleaks.toml"

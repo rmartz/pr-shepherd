@@ -1,194 +1,175 @@
 # Technical Architecture Reference
 
-This document captures non-business-logic technical decisions, patterns, and infrastructure setup for building a Next.js application with Firebase, Vercel, and high test coverage.
+This document captures non-business-logic technical decisions, patterns, and infrastructure setup for the PR Shepherd daemon. For the full design rationale and open questions, see the [vision document](https://github.com/rmartz/pr-shepherd/issues/1).
 
 ## Stack
 
-| Layer           | Technology                      | Purpose                                                            |
-| --------------- | ------------------------------- | ------------------------------------------------------------------ |
-| Framework       | Next.js (App Router)            | Fullstack React with SSR/API routes                                |
-| Language        | TypeScript (strict mode)        | Type safety throughout                                             |
-| Package Manager | pnpm                            | Fast, disk-efficient dependency management                         |
-| UI Components   | ShadCN UI + Tailwind CSS        | Composable, accessible component primitives                        |
-| State (server)  | TanStack Query                  | Server state caching, polling, invalidation                        |
-| State (client)  | Redux Toolkit                   | Local UI state (forms, config panels)                              |
-| Database        | Firebase RTDB or Firestore      | Project's choice; both scaffolded with rules, accessors, and hooks |
-| Auth            | Firebase Admin SDK (server)     | Session-based auth via API routes                                  |
-| Hosting         | Vercel                          | Deployment, preview URLs, edge functions                           |
-| Testing         | Vitest + @testing-library/react | Unit, component, and integration tests                             |
-| Visual Testing  | Storybook 10                    | Component development and visual documentation                     |
-| CI/CD           | GitHub Actions                  | Lint, format, test, build on every PR                              |
-| Monitoring      | Sentry                          | Error tracking (client + server + edge)                            |
+| Layer           | Technology                                    | Purpose                                                  |
+| --------------- | --------------------------------------------- | -------------------------------------------------------- |
+| Runtime         | Node.js 24 LTS                                | Ships everywhere; first-class `child_process` for Claude |
+| Language        | TypeScript (strict mode)                      | Schema safety across DB ↔ engine ↔ API boundary          |
+| Package Manager | pnpm                                          | Fast, disk-efficient dependency management               |
+| Data store      | Firestore (hosted/emulator) or RxDB + LevelDB | Adapter-agnostic; configured per `config.yaml`           |
+| Web framework   | Next.js (App Router, custom server)           | UI views + API route handlers                            |
+| UI components   | ShadCN UI + Tailwind CSS                      | Composable, accessible component primitives              |
+| UI state        | Zustand + SSE                                 | Reactive without Redux overhead                          |
+| CLI             | `commander`                                   | Single `shepherd` binary                                 |
+| Testing         | Vitest + @testing-library/react               | Unit, component, and integration tests                   |
+| Visual testing  | Storybook                                     | Component development                                    |
+| Monitoring      | Sentry                                        | Daemon error tracking                                    |
+| CI/CD           | GitHub Actions                                | Lint, format, test, build on every PR                    |
+
+## Daemon Overview
+
+PR Shepherd is a single Node.js process that:
+
+1. Polls GitHub for new pull requests in configured repositories.
+2. Enrolls each new PR into a versioned workflow definition (`base-pr` or `dependabot-pr`).
+3. Drives the workflow through discrete, retryable step instances — invoking Claude as a subprocess for review/fix-review/merge steps, polling CI/Copilot for wait steps, and calling the GitHub API for label/comment steps.
+4. Exposes a reactive Next.js UI (Server-Sent Events) showing live run state, step timing, and step logs.
+
+The daemon is **crash-safe**: every step writes to the data store before, during, and after execution. On restart, in-flight runs resume from the failed step rather than from scratch. Step idempotency at the GitHub API level (label changes, comment posts) makes retries safe.
+
+For the full lifecycle, engine model, and resilience guarantees, see vision §3–§8.
 
 ## Project Structure
 
+The repository layout follows vision §12:
+
 ```
-project-root/
+pr-shepherd/
 ├── src/
-│   ├── app/                    # Next.js App Router pages and API routes
-│   │   ├── page.tsx            # Home page
-│   │   ├── [dynamic]/          # Dynamic route segments
-│   │   └── api/                # API route handlers
-│   ├── components/
-│   │   ├── ui/                 # ShadCN UI primitives (auto-generated, excluded from lint/prettier)
-│   │   ├── {feature}/          # Feature-specific components with co-located stories and tests
-│   │   └── {shared}/           # Shared components
-│   ├── lib/
-│   │   ├── firebase/           # Firebase Admin + client SDK wrappers
-│   │   │   ├── admin.ts        # Server-side Firebase Admin initialization
-│   │   │   ├── client.ts       # Client-side Firebase SDK initialization
-│   │   │   └── schema/         # TypeScript types and serialization helpers
-│   │   ├── types/              # Core domain types (barrel-exported)
-│   │   └── utils.ts            # Shared utility functions (e.g., cn() for Tailwind)
-│   ├── server/
-│   │   ├── types/              # API response types (public-facing)
-│   │   └── utils/              # Server-only helpers (auth, validation)
-│   ├── services/               # Data access layer (Firebase-backed)
-│   ├── hooks/                  # Custom React hooks (barrel-exported)
-│   ├── store/                  # Redux Toolkit slices
-│   └── test-setup/             # Vitest setup files (mocks, globals)
-├── .storybook/                 # Storybook configuration
-├── .github/
-│   ├── actions/setup/          # Composite action: pnpm + Node.js + install
-│   └── workflows/              # CI workflows
-├── docs/                       # Feature documentation
-├── package.json
-├── tsconfig.json
-├── next.config.ts
-├── vitest.config.mts
-├── eslint.config.js            # Flat config with typescript-eslint + react-hooks + storybook
-├── postcss.config.mjs
-└── .prettierignore
+│   ├── app/                          # Next.js App Router
+│   │   ├── api/                      # API route handlers (runs, repos, events SSE)
+│   │   ├── runs/                     # Run List + Run Detail views
+│   │   └── repos/                    # Repository List view
+│   ├── components/                   # Shared React components ("use client")
+│   ├── store/                        # Zustand store, SSE subscription
+│   ├── db/                           # Data layer (adapter-agnostic)
+│   │   ├── index.ts                  # DB interface
+│   │   ├── adapters/                 # firebaseHosted / firebaseEmulator / leveldb
+│   │   ├── schemas/                  # Zod schemas
+│   │   └── migrations/               # Versioned migration scripts
+│   ├── engine/                       # Scheduler, runner, routing, recovery, metrics
+│   ├── steps/                        # Step executors (claude_skill, wait_external, etc.)
+│   └── config/                       # Config + workflow YAML loaders
+├── server.ts                         # Custom Next.js server — bootstraps engine before next()
+├── workflows/                        # Workflow YAML definitions (base-pr, dependabot-pr, …)
+├── config.yaml                       # Operator config (gitignored)
+├── config.example.yaml               # Committed example
+├── deployment/                       # Public env config (preview, production)
+└── …config files
 ```
 
-## Firebase Architecture
+Domain code lands in `engine/`, `steps/`, and `db/`. UI work lives in `app/` and `components/`. The custom Next.js server (`server.ts`) bootstraps the engine before delegating HTTP to `next()` so both share a single process and Node runtime.
 
-### Packages
+## Data Model
 
-- `firebase` (client SDK) — browser-side Firebase access
-- `firebase-admin` (server SDK) — server-side Firebase access via API routes
+The four primary collections (vision §3):
 
-### Choosing a Data Store
+| Collection            | Purpose                                                                                                        |
+| --------------------- | -------------------------------------------------------------------------------------------------------------- |
+| `repositories`        | GitHub repos the daemon is configured to watch. Carries per-repo concurrency caps and workflow assignments.    |
+| `workflowRuns`        | One execution of a workflow definition for one PR. Holds the shared context object, metrics, and current step. |
+| `stepInstances`       | One execution of a single step within a run. Records input snapshot, output, logs, status, timing, retries.    |
+| `workflowDefinitions` | Reference copy of the workflow YAML at the time the run started (audit purposes only).                         |
 
-Projects built from this template should choose the data store that fits their needs. Both **Realtime Database (RTDB)** and **Firestore** are scaffolded with security rules, SDK accessors, and real-time subscription hooks. Pick one (or neither) and remove the scaffold for the other:
+Schemas are strict (Zod) and versioned. Migrations are stored in `src/db/migrations/`.
 
-|                   | Realtime Database             | Firestore              |
-| ----------------- | ----------------------------- | ---------------------- |
-| Data model        | JSON tree                     | Document/collection    |
-| Queries           | Path-based; limited filtering | Rich query support     |
-| Real-time         | `onValue` push                | `onSnapshot` push      |
-| Rules file        | `database.rules.json`         | `firestore.rules`      |
-| Client accessor   | `getClientDatabase()`         | `getClientFirestore()` |
-| Server accessor   | `getAdminDatabase()`          | `getAdminFirestore()`  |
-| Subscription hook | `useRealtimeValue`            | `useFirestoreDocument` |
+## Workflow Engine
 
-Remove `FIREBASE_DATABASE_URL` / `NEXT_PUBLIC_FIREBASE_DATABASE_URL` from env and config if not using RTDB.
+The engine is a scheduler loop (vision §4) that runs every 5 seconds by default:
 
-### Initialization
+1. Fetches all `stepInstances` with `status: "pending"`.
+2. Enforces two independent concurrency dimensions: a **global** Claude-slot cap and a **per-repo** active-step cap.
+3. Transitions eligible steps to `queued`, then `running`, then dispatches to the appropriate executor.
+4. Watches `heartbeatAt` on running steps; declares any step stale after 60s without a heartbeat and retries it.
 
-Both SDKs are lazily initialized to avoid errors during static builds (CI has no env vars). `src/lib/firebase/client.ts` and `src/lib/firebase/admin.ts` expose product-specific accessors — call the one for your chosen data store:
+On startup, recovery (§8.2) finds any `workflowRuns` left in `running` status from a prior process, marks the active steps as failed with `error: "process_restart"`, and re-enqueues them as fresh `pending` steps (respecting `maxRetries`). Steps are designed to be idempotent at the GitHub API level — re-running a review that already posted will detect the existing post and skip rather than double-posting.
 
-```typescript
-// Realtime Database
-import { getClientDatabase } from "@/lib/firebase/client";
-import { ref } from "firebase/database";
-const userRef = ref(getClientDatabase(), `users/${uid}`);
+## Step Executors
 
-// Firestore
-import { getClientFirestore } from "@/lib/firebase/client";
-import { doc } from "firebase/firestore";
-const userDoc = doc(getClientFirestore(), "users", uid);
+| Step type       | Executor                                              | Counts against | Notes                                        |
+| --------------- | ----------------------------------------------------- | -------------- | -------------------------------------------- |
+| `claude_skill`  | Spawn `claude -p "<skill> <pr>"` subprocess           | global + repo  | Updates Claude time bucket                   |
+| `wait_external` | Spawn `wait-for-ci.py` / `wait-for-copilot-review.py` | repo only      | Holds `waiting` status; no global slot used  |
+| `github_api`    | Direct `gh` CLI or MCP call                           | repo only      | Label changes, comment posts, branch updates |
+| `decision`      | Pure in-process routing evaluation                    | neither        | Instantaneous                                |
+| `fork`          | Create child `workflowRun` + first step               | neither        | Used to spawn Dependabot fix PRs             |
+
+`wait_external` does not hold a global Claude slot while waiting — this prevents long external waits from blocking other repos' Claude work.
+
+## Routing DSL
+
+Routes are evaluated top-to-bottom; first match wins. Conditions are safe-evaluated JSONPath expressions against a merged `{output, context}` object — no arbitrary code execution.
+
+```yaml
+routing:
+  - condition: "output.verdict == 'approved'"
+    next: wait_copilot_review
+  - condition: "output.verdict == 'changes_requested'"
+    next: wait_author_push
+  - condition: true # catch-all
+    next: null # terminal (run complete)
 ```
 
-Product instances should be accessed via function calls, never module-level constants.
+See vision §4.4 for the full DSL spec and §5 for the bundled workflows.
 
-### Real-Time Subscription Hooks
+## Data Store
 
-Use the scaffolded hooks to subscribe to data and keep TanStack Query's cache in sync:
+The data model is implementation-neutral. Three adapter options are supported behind the `src/db/index.ts` interface (vision §11):
 
-```typescript
-// Realtime Database
-import { useRealtimeValue } from "@/hooks";
-import { ref } from "firebase/database";
-import { getClientDatabase } from "@/lib/firebase/client";
+| Adapter           | Trade-off                                                                                             |
+| ----------------- | ----------------------------------------------------------------------------------------------------- |
+| Hosted Firestore  | **Recommended default.** Managed durability, native reactive listeners, cross-device dashboard.       |
+| Firebase Emulator | Offline-capable; same code path as hosted (flag-only switch). Requires `firebase-tools` (~300 MB).    |
+| RxDB + LevelDB    | Truly embedded; single-process; no Firebase tooling. Limited query capability; no cloud upgrade path. |
 
-const userRef = useMemo(() => ref(getClientDatabase(), `users/${uid}`), [uid]);
-const { data, isLoading } = useRealtimeValue(userRef, (s) => s.val() as User, [
-  "users",
-  uid,
-]);
+The active adapter is chosen at startup from `config.yaml`. Engine and step code reference only the adapter-agnostic interface.
 
-// Firestore
-import { useFirestoreDocument } from "@/hooks";
-import { doc } from "firebase/firestore";
-import { getClientFirestore } from "@/lib/firebase/client";
+## Configuration
 
-const userDoc = useMemo(() => doc(getClientFirestore(), "users", uid), [uid]);
-const { data, isLoading } = useFirestoreDocument(
-  userDoc,
-  (s) => s.data() as User | undefined,
-  ["users", uid],
-);
-```
+Two configuration surfaces:
 
-Pass a memoised ref and a stable `queryKey` to avoid redundant re-subscriptions. Mutations go through API routes (Admin SDK write) → Firebase push → hook updates cache automatically.
+- **`config.yaml`** at the repo root (gitignored; `config.example.yaml` committed). Operator config: repositories to watch, concurrency limits, polling intervals, data-store adapter, server port. See vision §9 for the schema.
+- **`workflows/*.yaml`** — workflow definitions, hot-reloaded by the engine on change. See vision §5.
 
-### RTDB Schema Pattern
+Public, non-secret deployment config (Firebase project IDs, Sentry org/project, `NEXT_PUBLIC_*` keys) lives in `deployment/{env}.yml` and is validated against `deployment/schema.yml` on every commit and in CI. Secrets never go in these files.
 
-When using Realtime Database, separate public and private data at the path level:
-
-```
-/{collection}/{id}/public    # World-readable data (client SDK subscribes here)
-/{collection}/{id}/private   # Server-only data (Admin SDK only)
-```
-
-See `database.rules.json` for the corresponding default security rules.
-
-### Firestore Schema Pattern
-
-Firestore organises data as collections of documents. Use uid-scoped paths for per-user data:
-
-```
-/users/{uid}/          # User profile and settings
-/{collection}/{id}/    # Domain data — define access rules per collection
-```
-
-See `firestore.rules` for the default deny-all scaffold with a uid-scoped example.
-
-### Serialization Layer
-
-- TypeScript types define the domain model
-- `{domain}ToFirebase()` converts domain objects to Firebase-safe format (no `undefined` values)
-- `firebaseTo{Domain}()` converts Firebase snapshots back to domain objects with defaults
-- Boolean settings are always written explicitly (not sparse) and deserialized with `?? false`
-
-### Firebase Emulator
-
-`firebase.json` configures local emulators for Auth, RTDB, and Firestore. Run them during development and testing to avoid touching production data:
+To update a public config value and sync to Vercel:
 
 ```bash
-pnpm emulator
+scripts/update-config.sh --env=preview KEY=value --sync
 ```
 
-Point tests at the emulator by setting environment variables before running Vitest:
+To rotate all secrets with zero downtime:
 
 ```bash
-FIREBASE_DATABASE_EMULATOR_HOST=localhost:9000 \
-FIRESTORE_EMULATOR_HOST=localhost:8080 \
-pnpm test
+pnpm exec sync-env --rotate-keys --env=preview
 ```
 
-### Environment Variables
+## UI
 
-| Variable                 | Side   | Description                                    |
-| ------------------------ | ------ | ---------------------------------------------- |
-| `FIREBASE_PROJECT_ID`    | Server | Firebase project ID                            |
-| `FIREBASE_CLIENT_EMAIL`  | Server | Service account email                          |
-| `FIREBASE_PRIVATE_KEY`   | Server | Service account key (literal `\n`)             |
-| `FIREBASE_DATABASE_URL`  | Server | RTDB URL (omit if using Firestore only)        |
-| `NEXT_PUBLIC_FIREBASE_*` | Client | Client SDK config (API key, auth domain, etc.) |
+Three primary views (vision §7):
 
-`NEXT_PUBLIC_` variables are bundled into client JavaScript — this is by design. Access control is enforced by Firebase security rules, not by hiding these keys.
+- **`/` (Run List)** — All workflow runs with status, current step, timing badges. Child runs (fix PRs) indented under parents.
+- **`/runs/[id]` (Run Detail)** — Run metadata + step timeline. Click a step row to expand input/output/logs in a drawer.
+- **`/repos` (Repository List)** — Configured repos with enabled toggle, concurrency usage, 24h activity counts.
+
+Live updates flow through a Server-Sent Events endpoint at `app/api/events/route.ts`. The data layer's reactive subscriptions push changes; the UI's Zustand store patches the affected row without a full reload.
+
+## Timing Metrics
+
+Each step records four mutually exclusive time buckets (vision §6):
+
+| Bucket        | Covers                                          |
+| ------------- | ----------------------------------------------- |
+| Claude time   | Wall-clock of `claude_skill` subprocess         |
+| Active time   | Step `running` status (non-waiting)             |
+| Schedule wait | Time queued waiting for a concurrency slot      |
+| External wait | Time `wait_external` spent polling CI / Copilot |
+
+Run-level metrics are the sum of all completed step instances. Roll-up is incremental — updated as each step completes, not recomputed from scratch.
 
 ## Vitest Configuration
 
@@ -199,7 +180,7 @@ Three test projects in `vitest.config.mts`:
   test: {
     projects: [
       {
-        // Unit tests (actions, services, utilities)
+        // Unit tests (engine, executors, utilities)
         test: { name: "node", environment: "node", include: ["src/**/*.spec.ts"] },
       },
       {
@@ -215,36 +196,28 @@ Three test projects in `vitest.config.mts`:
 }
 ```
 
-The file extension convention (`.spec.ts` vs `.spec.tsx`) determines which project runs each test. This keeps the split automatic — no manual tagging or directory-based routing needed.
+The file extension convention (`.spec.ts` vs `.spec.tsx`) determines which project runs each test.
 
-### Test File Conventions
+### Test Conventions
 
-- Co-located with source: `Component.spec.tsx`, `utility.spec.ts`
-- Component tests use `@testing-library/react` with `afterEach(cleanup)`
-- No jest-dom matchers — use `.toBeDefined()` or `.textContent`
-- Test fixtures use `make{Domain}()` factory functions
-- Large test files split into `{module}-tests/` directories
+- Co-located with source: `Component.spec.tsx`, `utility.spec.ts`.
+- Component tests use `@testing-library/react` with `afterEach(cleanup)`.
+- No jest-dom matchers — use `.toBeDefined()` or `.textContent`.
+- Test fixtures use `make{Domain}()` factory functions.
+- Large test files split into `{module}-tests/` directories.
 
 ## Storybook Configuration
 
-### Setup
-
-- Framework: `@storybook/nextjs-vite`
-- Addons: `addon-a11y`, `addon-docs`, `eslint-plugin-storybook`
-- Tailwind loaded via `globals.css` import in `.storybook/preview.ts`
+- Framework: `@storybook/nextjs-vite`.
+- Addons: `addon-a11y`, `addon-docs`, `eslint-plugin-storybook`.
+- Tailwind loaded via `globals.css` import in `.storybook/preview.ts`.
 
 ### Conventions
 
-- Stories co-located as `ComponentName.stories.tsx`
-- Presentational split for hook-dependent components: `{Component}View` accepts callbacks
-- Mock data fixtures — no Firebase, no providers
-- ESLint: strict TS rules relaxed for `.stories.tsx`; `.storybook/` and `storybook-static/` ignored
-
-### Future Evaluation
-
-- Chromatic for visual regression testing
-- `@storybook/addon-vitest` for story-based integration testing
-- `@storybook/addon-onboarding` — interactive first-launch walkthrough. Low value for solo/small-team projects where conventions are documented in AGENTS.md. May be useful for projects with frequent new contributors who need to learn the story writing workflow.
+- Stories co-located as `ComponentName.stories.tsx`.
+- Presentational split for hook-dependent components: `{Component}View` accepts callbacks.
+- Mock data fixtures — no Firestore, no Zustand store, no Next.js router.
+- ESLint: strict TS rules relaxed for `.stories.tsx`; `.storybook/` and `storybook-static/` ignored.
 
 ## ESLint Configuration
 
@@ -253,7 +226,7 @@ Flat config (`eslint.config.js`) with:
 - `typescript-eslint` strict + stylistic type-checked rules for `src/**/*.{ts,tsx}`
 - `react-hooks` plugin (rules-of-hooks + exhaustive-deps as errors)
 - `eslint-plugin-storybook` flat/recommended
-- Relaxed rules for test files (`*.test.ts`) and story files (`*.stories.tsx`)
+- Relaxed rules for test files (`*.spec.ts`) and story files (`*.stories.tsx`)
 - Ignored: `dist/`, `node_modules/`, `.next/`, `storybook-static/`, `.storybook/`, `src/components/ui/`
 
 ## CI/CD Pipeline
@@ -269,153 +242,63 @@ Flat config (`eslint.config.js`) with:
 ```
 
 **CI checks** (run on every PR):
-| Job | Command | Purpose |
-|---|---|---|
-| Tests | `pnpm test` | Vitest across all projects |
-| Lint | `pnpm lint` | ESLint with zero warnings |
-| Format | `pnpm format:check` | Prettier check |
-| Build | `pnpm build` | Next.js production build |
+
+| Job    | Command             | Purpose                    |
+| ------ | ------------------- | -------------------------- |
+| Tests  | `pnpm test`         | Vitest across all projects |
+| Lint   | `pnpm lint`         | ESLint with zero warnings  |
+| Format | `pnpm format:check` | Prettier check             |
+| Build  | `pnpm build`        | Next.js production build   |
+
+**Secret Scan** — Runs gitleaks and validates deployment config on every PR and push to `main`.
 
 **Claude Code** (`issue_comment`, `pull_request_review_comment`, `issues`): Optional — runs Claude Code action when `@claude` is mentioned in issues/PRs. Requires `ANTHROPIC_API_KEY` secret.
 
 ### Vercel
 
+The daemon itself runs locally — Vercel hosting is optional and used only to deploy the read-only UI for remote dashboard access. When using hosted Firestore, the deployed UI reads live state from any device.
+
 - Automatic preview deployments on every PR
 - Production deployment on merge to main
 - Root directory: project root (no subdirectory)
 
-## Service Layer Pattern
+## Resilience
 
-### Separation of Concerns
+### Heartbeat Recovery
 
-```
-API Route → Service (data access) → Firebase
-```
+Running steps update `heartbeatAt` every 15 seconds. On every scheduler loop iteration, any step with `heartbeatAt` older than 60 seconds is declared dead, marked failed, and (if under `maxRetries`) re-created as a new pending step with the same input snapshot. See vision §8.1.
 
-- **Services**: Pure data access — read/write Firebase. No business logic.
-- **Business logic modules**: Domain-specific logic separated from data access.
+### Crash Recovery on Startup
 
-### Service Conventions
+On process start, before the scheduler loop begins, all `workflowRuns` with `status: "running"` have their active step instances transitioned to `failed` and re-enqueued as fresh `pending` steps. Any in-flight Claude invocation that was mid-execution is retried from the beginning of that step. See vision §8.2.
 
-- Service functions accept and return typed interfaces, never raw Firebase snapshots
-- Timestamps converted to `Date` objects at the service boundary
-- Each domain gets its own service file or directory
-- Components never import Firebase directly — all data access goes through services or hooks
+### Idempotency Guards
 
-## State Management
+- `claude_skill` steps: before invoking, check if the skill's expected side-effect already occurred (e.g., "approved" label present → skip `/review`, route directly to `wait_copilot_review`).
+- `github_api` steps: use conditional writes where possible; check-then-act with stale-detection.
+- `fork` steps: check for existing child run before spawning a duplicate.
 
-### Server State (TanStack Query)
+## Environment Variables
 
-- Data fetched via `useQuery` with Firebase `onValue` for real-time push
-- Mutations via `useMutation` → API routes → Firebase Admin SDK
-- Cache invalidation on successful mutation
+| Variable                 | Side   | Description                                    |
+| ------------------------ | ------ | ---------------------------------------------- |
+| `FIREBASE_PROJECT_ID`    | Server | Firebase project ID (hosted Firestore adapter) |
+| `FIREBASE_CLIENT_EMAIL`  | Server | Service account email                          |
+| `FIREBASE_PRIVATE_KEY`   | Server | Service account key (literal `\n`)             |
+| `NEXT_PUBLIC_FIREBASE_*` | Client | Client SDK config (for the UI)                 |
+| `SENTRY_*`               | Server | Error tracking                                 |
+| `GITHUB_TOKEN`           | Server | GitHub PAT for repo polling and API calls      |
 
-### Client State (Redux Toolkit)
-
-- Used for local UI state only (forms, config panels)
-- Slices in `store/{feature}-slice.ts`
-- Connected to components via `useAppSelector` / `useAppDispatch`
-
-### Providers Pattern
-
-A client boundary component wraps the app with all required providers:
-
-```
-Root Layout → Providers ("use client") → QueryClientProvider → AuthProvider → Pages
-```
-
-`QueryClient` is created via `useState` inside the Providers component to avoid re-creation on re-renders.
-
-### Real-Time Pattern
-
-```
-Firebase RTDB push → onValue callback → TanStack Query cache update → React re-render
-```
-
-No polling needed for subscribed paths. Mutations go through API routes, which write to Firebase, which triggers the push.
-
-## Authentication Pattern
-
-The template uses Firebase Auth with server-side session cookies for SSR compatibility.
-
-### AuthProvider → useAuth() contract
-
-`AuthProvider` (`src/components/auth/AuthProvider.tsx`) subscribes to `onAuthStateChanged` and exposes `{ user: User | null, loading: boolean }` via React context. Components and hooks access this via `useAuth()` from `src/hooks/use-auth.ts` — never import Firebase Auth directly in components.
-
-### Session cookie flow
-
-1. User signs in via `signIn()` / `signUp()` from `src/services/auth.ts`
-2. Client calls `user.getIdToken()` and POSTs it to `POST /api/auth/session`
-3. The server calls `getAdminAuth().createSessionCookie()` and sets an `HttpOnly`, `Secure`, `SameSite=Strict` cookie
-4. Middleware (`src/middleware.ts`) verifies the cookie on every request via `getAdminAuth().verifySessionCookie(cookie, true)` and redirects unauthenticated requests to `/sign-in?next=<path>`
-5. On sign-out, call `DELETE /api/auth/session` to clear the cookie, then call `signOut()` from the auth service
-
-The middleware runs in the Node.js runtime (not Edge) because `firebase-admin` does not support the Edge runtime.
-
-### Adding SSO providers (Google, Apple, etc.)
-
-Adding a provider requires only client-side changes — no server modifications needed. Add a function to `src/services/auth.ts` and call it from the component:
-
-```typescript
-// src/services/auth.ts
-import { GoogleAuthProvider, signInWithPopup } from "firebase/auth";
-
-export async function signInWithGoogle() {
-  const credential = await signInWithPopup(
-    getClientAuth(),
-    new GoogleAuthProvider(),
-  );
-  await createSession(await credential.user.getIdToken());
-}
-
-// In your component:
-import { signInWithGoogle } from "@/services/auth";
-await signInWithGoogle();
-```
-
-### Scoping data to the authenticated user
-
-The verified session cookie decoded by `verifySessionCookie()` contains `uid`. Use this to scope all database reads and writes to the authenticated user's paths.
-
-## Key Packages
-
-### Dependencies
-
-| Package                                                | Purpose                              |
-| ------------------------------------------------------ | ------------------------------------ |
-| `next`                                                 | Fullstack React framework            |
-| `react` / `react-dom`                                  | UI rendering                         |
-| `@reduxjs/toolkit` / `react-redux`                     | Client state management              |
-| `@tanstack/react-query`                                | Server state management              |
-| `firebase`                                             | Client SDK (real-time subscriptions) |
-| `firebase-admin`                                       | Server SDK (data mutations)          |
-| `@sentry/nextjs`                                       | Error tracking                       |
-| `@vercel/analytics`                                    | Usage analytics                      |
-| `class-variance-authority` / `clsx` / `tailwind-merge` | ShadCN UI utilities                  |
-| `lucide-react`                                         | Icons                                |
-
-### Dev Dependencies
-
-| Package                                                                                  | Purpose                                        |
-| ---------------------------------------------------------------------------------------- | ---------------------------------------------- |
-| `typescript`                                                                             | Type checking                                  |
-| `vitest` / `@testing-library/react` / `happy-dom`                                        | Testing                                        |
-| `storybook` / `@storybook/nextjs-vite`                                                   | Component development                          |
-| `eslint` / `typescript-eslint` / `eslint-plugin-react-hooks` / `eslint-plugin-storybook` | Linting                                        |
-| `prettier`                                                                               | Formatting                                     |
-| `prettier-plugin-tailwindcss`                                                            | Automatic Tailwind class sorting (recommended) |
-| `husky` / `lint-staged`                                                                  | Pre-commit hooks                               |
-| `tailwindcss` / `@tailwindcss/postcss` / `postcss`                                       | Styling                                        |
-| `shadcn`                                                                                 | ShadCN UI CLI                                  |
+`NEXT_PUBLIC_` variables are bundled into client JavaScript — this is by design. Firestore access control is enforced by security rules (deny-all by default; the daemon writes via the admin SDK).
 
 ## Initialization Checklist
 
-When starting a new project from this template:
+When setting up the daemon for the first time:
 
-1. Click "Use this template" on GitHub
-2. Clone the new repository and run `pnpm install`
-3. Copy `.env.example` to `.env.local` and fill in Firebase credentials
-4. Configure Firebase project + environment variables
-5. Set up Vercel project with GitHub integration
-6. Add `ANTHROPIC_API_KEY` secret to GitHub repository settings (for Claude Code workflow)
-7. Update `AGENTS.md` / `CLAUDE.md` with project-specific conventions
+1. Clone the repository and run `pnpm install`.
+2. Copy `.env.example` to `.env.local` and fill in Firebase credentials.
+3. Copy `config.example.yaml` to `config.yaml` and declare the repositories to watch.
+4. Authenticate the `gh` CLI (`gh auth login`) — used by the daemon to poll GitHub and post comments.
+5. Ensure the [Claude Code CLI](https://docs.claude.com/en/docs/claude-code) is installed and authenticated.
+6. (Optional) Set up Vercel with GitHub integration if the UI will be deployed for remote access.
+7. Run `shepherd start`.
