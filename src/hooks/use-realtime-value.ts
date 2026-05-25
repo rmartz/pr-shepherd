@@ -7,7 +7,12 @@ import {
   type DatabaseReference,
   type DataSnapshot,
 } from "firebase/database";
-import { useQuery, useQueryClient, type QueryKey } from "@tanstack/react-query";
+import {
+  useQuery,
+  useQueryClient,
+  type QueryKey,
+  type UseQueryResult,
+} from "@tanstack/react-query";
 
 /**
  * Subscribes to a Realtime Database path and keeps TanStack Query's cache in
@@ -22,7 +27,7 @@ export function useRealtimeValue<T>(
   ref: DatabaseReference | undefined,
   deserialize: (snapshot: DataSnapshot) => T,
   queryKey: QueryKey,
-) {
+): UseQueryResult<T> {
   const queryClient = useQueryClient();
   const queryKeyRef = useRef(queryKey);
   queryKeyRef.current = queryKey;
