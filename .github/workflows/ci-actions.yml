@@ -3,8 +3,11 @@ name: CI
 on:
   push:
     branches: ["main"]
+  # Fire on all PRs (no `branches` filter) so stacked PRs whose base is a
+  # feature branch (not main) still get CI coverage. The push trigger above
+  # is still scoped to main only — feature-branch pushes only run CI via
+  # the pull_request trigger, which avoids duplicate runs per push.
   pull_request:
-    branches: ["main"]
 
 permissions:
   contents: read
