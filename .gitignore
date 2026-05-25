@@ -11,5 +11,10 @@ tsconfig.tsbuildinfo
 storybook-static
 next-env.d.ts
 .git-worktrees/
+
+# Daemon operator config — copy config.example.yaml to config.yaml and edit
 config.yaml
+# Local-only workflow overrides
 workflows/*.local.yaml
+# Daemon runtime data (run-step logs, optional LevelDB adapter store)
+data/

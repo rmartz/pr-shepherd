@@ -1,0 +1,40 @@
+# PR Shepherd operator config — copy this file to `config.yaml` and edit.
+# `config.yaml` is gitignored; this example is committed so the schema is
+# always discoverable. See ARCHITECTURE.md and vision issue #1 for details.
+
+# Concurrency caps for Claude subprocess execution.
+concurrency:
+  systemMax: 8 # max simultaneous Claude invocations across all repos
+  defaultRepoMax: 2 # per-repo default; overridable per `repositories[].concurrencyMax`
+
+# Repositories the daemon watches. The polling loop scans each for new PRs and
+# enrolls them in the workflow matched by `workflows[].match` against the PR
+# author. The `*` glob matches any author and should be the catch-all rule
+# last in the list.
+repositories:
+  - id: owner/example-repo
+    enabled: true
+    concurrencyMax: 2
+    workflows:
+      - match: "dependabot[bot]"
+        workflowId: dependabot-pr
+      - match: "*"
+        workflowId: base-pr
+
+# Polling and scheduler cadence.
+poll:
+  newPrIntervalSeconds: 60 # how often to scan GitHub for new PRs
+  schedulerIntervalSeconds: 5 # how often the scheduler loop runs
+  heartbeatIntervalSeconds: 15 # step heartbeat cadence (must be < scheduler dead-detect threshold)
+
+# Data store adapter. Three options, all behind the same `Db` interface in
+# `src/db/`. See ARCHITECTURE.md (#data-store) for trade-offs.
+db:
+  adapter: firebase-hosted # recommended default — managed Firestore (uses NEXT_PUBLIC_FIREBASE_* + service account)
+  # adapter: firebase-emulator   # local Firestore via `firebase emulators:start`; requires firebase-tools
+  # adapter: leveldb             # embedded RxDB + LevelDB at logOverflowPath/../shepherd.db
+  logOverflowPath: ./data/logs # step-log sidecar files when in-doc storage overflows
+
+# Web server (UI + API + SSE).
+server:
+  port: 3847
