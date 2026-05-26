@@ -27,7 +27,7 @@ describe("RepositorySchema round-trip and rejection", () => {
 
   it("rejects a repository missing the required owner field", () => {
     const invalid: Record<string, unknown> = { ...valid };
-    delete invalid.owner;
+    delete invalid["owner"];
     expect(() => RepositorySchema.parse(invalid)).toThrow();
   });
 });
@@ -124,7 +124,7 @@ describe("WorkflowDefinitionSchema round-trip and rejection", () => {
 
   it("rejects a workflow definition missing the required source field", () => {
     const invalid: Record<string, unknown> = { ...valid };
-    delete invalid.source;
+    delete invalid["source"];
     expect(() => WorkflowDefinitionSchema.parse(invalid)).toThrow();
   });
 });
