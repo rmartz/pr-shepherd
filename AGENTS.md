@@ -24,7 +24,7 @@ pnpm run env:validate # Validate deployment config files against schema
 pnpm run secrets-check # Config validation + gitleaks scan (also runs pre-commit)
 ```
 
-The full daemon (engine + UI) is launched via `shepherd start` once Epic 6 (CLI) lands.
+The headless daemon (engine + step executors only — no HTTP surface) is launched via `shepherd start` once Epic 6 (CLI) lands. The UI is a separate Next.js app deployed to Vercel; it reads run state from Firestore via `onSnapshot`. See [ARCHITECTURE.md](ARCHITECTURE.md#deployment-topology) for the split.
 
 ## Worktree Setup
 
@@ -117,7 +117,7 @@ Public (non-secret) environment config lives in `deployment/{env}.yml` and is va
 
 - Story files are co-located with their component: `ComponentName.stories.tsx`.
 - When adding or modifying a UI component, add or update its Storybook story to cover key visual states.
-- Stories should use mock data fixtures — never import from Firestore or depend on runtime providers (Zustand store, Next.js router, SSE event source).
+- Stories should use mock data fixtures — never import from Firestore or depend on runtime providers (Zustand store, Next.js router, Firebase Auth context).
 - Components that are too hook-dependent to render in isolation should use a presentational split: extract rendering into a `ComponentNameView` that accepts callbacks, and keep the original as a thin wrapper that wires up hooks.
 
 ## Component Tests
