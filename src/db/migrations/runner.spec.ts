@@ -110,6 +110,44 @@ describe("applyMigrations when a migration throws does not bump the schema versi
   });
 });
 
+describe("applyMigrations rejects duplicate migration versions before running anything", () => {
+  it("throws a descriptive error when a collection contains duplicate versions", async () => {
+    const { db, getCollectionMeta } = makeDb();
+    const first = makeMigration(1);
+    const second = makeMigration(1);
+
+    await expect(
+      applyMigrations(db, { testCol: [first, second] }),
+    ).rejects.toThrow('Duplicate migration version 1 for collection "testCol"');
+
+    expect(getCollectionMeta).not.toHaveBeenCalled();
+    expect(first.up).not.toHaveBeenCalled();
+    expect(second.up).not.toHaveBeenCalled();
+  });
+});
+
+describe("applyMigrations when schemaVersion stamping fails wraps the error with context", () => {
+  it("throws a descriptive error after a successful migration up", async () => {
+    const migration = makeMigration(2);
+    const setCollectionMeta = vi
+      .fn()
+      .mockRejectedValue(new Error("write rejected by Firestore"));
+    const db: Db = {
+      getCollectionMeta: vi.fn().mockResolvedValue({ schemaVersion: 1 }),
+      setCollectionMeta,
+    };
+
+    await expect(applyMigrations(db, { testCol: [migration] })).rejects.toThrow(
+      'Failed to stamp schemaVersion 2 for collection "testCol": write rejected by Firestore',
+    );
+
+    expect(migration.up).toHaveBeenCalledTimes(1);
+    expect(setCollectionMeta).toHaveBeenCalledWith("testCol", {
+      schemaVersion: 2,
+    });
+  });
+});
+
 describe("applyMigrations runs migrations in ascending version order regardless of input order", () => {
   it("applies version 1 before version 2 even when given in reverse order", async () => {
     const { db } = makeDb();

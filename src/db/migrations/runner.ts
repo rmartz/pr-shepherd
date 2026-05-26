@@ -30,6 +30,22 @@ export async function applyMigrations(
   for (const [collection, migrations] of Object.entries(
     migrationsByCollection,
   )) {
+    const seenVersions = new Set<number>();
+
+    for (const migration of migrations) {
+      if (seenVersions.has(migration.version)) {
+        throw new Error(
+          `Duplicate migration version ${String(migration.version)} for collection "${collection}"`,
+        );
+      }
+
+      seenVersions.add(migration.version);
+    }
+  }
+
+  for (const [collection, migrations] of Object.entries(
+    migrationsByCollection,
+  )) {
     const sorted = [...migrations].sort((a, b) => a.version - b.version);
     const meta = await db.getCollectionMeta(collection);
     const fromVersion = meta?.schemaVersion ?? 0;
@@ -45,9 +61,17 @@ export async function applyMigrations(
           { cause: error },
         );
       }
-      await db.setCollectionMeta(collection, {
-        schemaVersion: migration.version,
-      });
+      try {
+        await db.setCollectionMeta(collection, {
+          schemaVersion: migration.version,
+        });
+      } catch (error) {
+        const message = error instanceof Error ? error.message : String(error);
+        throw new Error(
+          `Failed to stamp schemaVersion ${String(migration.version)} for collection "${collection}": ${message}`,
+          { cause: error },
+        );
+      }
     }
 
     const lastPending = pending[pending.length - 1];
