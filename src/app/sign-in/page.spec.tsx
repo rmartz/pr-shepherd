@@ -1,5 +1,11 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
-import { render, screen, cleanup, fireEvent } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import {
   AuthContext,
   type AuthContextValue,
@@ -79,5 +85,57 @@ describe("SignInPage redirects when the user is already authenticated", () => {
       }),
     );
     expect(mockReplace).toHaveBeenCalledWith("/");
+  });
+});
+
+describe("SignInPage shows the popup-closed error when the user dismisses the popup", () => {
+  it("renders SIGN_IN_COPY.errorPopupClosed when signInWithPopup rejects with auth/popup-closed-by-user", async () => {
+    mockSignInWithPopup.mockRejectedValue({
+      code: "auth/popup-closed-by-user",
+    });
+    render(withAuth({ user: undefined, loading: false }));
+    fireEvent.click(
+      screen.getByRole("button", { name: SIGN_IN_COPY.buttonGoogle }),
+    );
+    await waitFor(() => {
+      expect(screen.getByText(SIGN_IN_COPY.errorPopupClosed)).toBeDefined();
+    });
+    // TODO: upgrade to userEvent.click when @testing-library/user-event is available
+  });
+});
+
+describe("SignInPage shows the generic error for any other auth failure", () => {
+  it("renders SIGN_IN_COPY.errorGeneric when signInWithPopup rejects with a different code", async () => {
+    mockSignInWithPopup.mockRejectedValue({
+      code: "auth/network-request-failed",
+    });
+    render(withAuth({ user: undefined, loading: false }));
+    fireEvent.click(
+      screen.getByRole("button", { name: SIGN_IN_COPY.buttonGoogle }),
+    );
+    await waitFor(() => {
+      expect(screen.getByText(SIGN_IN_COPY.errorGeneric)).toBeDefined();
+    });
+    // TODO: upgrade to userEvent.click when @testing-library/user-event is available
+  });
+});
+
+describe("SignInPage disables the button and swaps to the signing-in copy while submitting", () => {
+  it("renders SIGN_IN_COPY.signingIn on a disabled button after click while the popup is pending", async () => {
+    // Pending promise: never resolves within the test, so `submitting` stays true.
+    mockSignInWithPopup.mockReturnValue(
+      new Promise(() => {
+        /* never resolves */
+      }),
+    );
+    render(withAuth({ user: undefined, loading: false }));
+    fireEvent.click(
+      screen.getByRole("button", { name: SIGN_IN_COPY.buttonGoogle }),
+    );
+    const submittingButton = await screen.findByRole("button", {
+      name: SIGN_IN_COPY.signingIn,
+    });
+    expect((submittingButton as HTMLButtonElement).disabled).toBe(true);
+    // TODO: upgrade to userEvent.click when @testing-library/user-event is available
   });
 });
