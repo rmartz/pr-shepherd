@@ -10,23 +10,37 @@ This document captures non-business-logic technical decisions, patterns, and inf
 | Language        | TypeScript (strict mode)                      | Schema safety across DB ↔ engine ↔ API boundary          |
 | Package Manager | pnpm                                          | Fast, disk-efficient dependency management               |
 | Data store      | Firestore (hosted/emulator) or RxDB + LevelDB | Adapter-agnostic; configured per `config.yaml`           |
-| Web framework   | Next.js (App Router, custom server)           | UI views + API route handlers                            |
+| Web framework   | Next.js (App Router, deployed to Vercel)      | UI views — deployed independently of the daemon          |
 | UI components   | ShadCN UI + Tailwind CSS                      | Composable, accessible component primitives              |
-| UI state        | Zustand + SSE                                 | Reactive without Redux overhead                          |
-| CLI             | `commander`                                   | Single `shepherd` binary                                 |
+| UI state        | Zustand + Firestore `onSnapshot`              | Reactive run/step updates pushed by Firestore            |
+| UI auth         | Firebase Auth (Google sign-in + allowlist)    | Gates UI access; daemon has no auth                      |
+| CLI             | `commander`                                   | Single `shepherd` binary (daemon-side only)              |
 | Testing         | Vitest + @testing-library/react               | Unit, component, and integration tests                   |
 | Visual testing  | Storybook                                     | Component development                                    |
 | Monitoring      | Sentry                                        | Daemon error tracking                                    |
 | CI/CD           | GitHub Actions                                | Lint, format, test, build on every PR                    |
 
+## Deployment Topology
+
+PR Shepherd ships as **two independently deployable surfaces** that share state through hosted Firestore. The full rationale is in vision #1 §15; the practical consequences are:
+
+| Surface    | Where it runs                                | What it does                                                                                                                                                                       | How it reaches the other                     |
+| ---------- | -------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------------------- |
+| **Daemon** | Locally on the operator's machine (headless) | Engine + step executors. Spawns `claude`, `gh`, and CI-polling subprocesses. Writes run/step state to Firestore via the admin SDK.                                                 | Writes (admin SDK bypasses Firestore rules). |
+| **UI**     | Vercel                                       | Next.js App Router app. Reads run state via Firestore client-SDK `onSnapshot` subscriptions. Authenticates operators via Firebase Auth (Google sign-in, email allowlist in rules). | Reads (rules-gated).                         |
+
+The daemon does **not** host an HTTP server. There is no `server.ts`, no `app/api/events/route.ts`, no SSE endpoint, no port to expose. The Vercel UI uses the standard `next start` entrypoint that Vercel auto-detects.
+
+Operator → daemon control actions (toggle a repo's `enabled`, force-retry a step) flow through a `commands` collection in Firestore: the UI writes a command document, the daemon's admin-SDK subscription picks it up and acts.
+
 ## Daemon Overview
 
-PR Shepherd is a single Node.js process that:
+The daemon is a single Node.js process that:
 
 1. Polls GitHub for new pull requests in configured repositories.
 2. Enrolls each new PR into a versioned workflow definition (`base-pr` or `dependabot-pr`).
 3. Drives the workflow through discrete, retryable step instances — invoking Claude as a subprocess for review/fix-review/merge steps, polling CI/Copilot for wait steps, and calling the GitHub API for label/comment steps.
-4. Exposes a reactive Next.js UI (Server-Sent Events) showing live run state, step timing, and step logs.
+4. Writes run/step/command state to Firestore via the admin SDK so the Vercel UI can observe it live.
 
 The daemon is **crash-safe**: every step writes to the data store before, during, and after execution. On restart, in-flight runs resume from the failed step rather than from scratch. Step idempotency at the GitHub API level (label changes, comment posts) makes retries safe.
 
@@ -39,29 +53,32 @@ The repository layout follows vision §12:
 ```
 pr-shepherd/
 ├── src/
-│   ├── app/                          # Next.js App Router
-│   │   ├── api/                      # API route handlers (runs, repos, events SSE)
+│   ├── app/                          # Next.js App Router (UI — Vercel)
+│   │   ├── sign-in/                  # Firebase Auth sign-in page
 │   │   ├── runs/                     # Run List + Run Detail views
 │   │   └── repos/                    # Repository List view
 │   ├── components/                   # Shared React components ("use client")
-│   ├── store/                        # Zustand store, SSE subscription
-│   ├── db/                           # Data layer (adapter-agnostic)
+│   │   └── auth/                     # AuthProvider, AuthGate
+│   ├── store/                        # Zustand store + Firestore onSnapshot subscriptions
+│   ├── hooks/                        # Reactive hooks (useAuth, useWorkflowRuns, …)
+│   ├── db/                           # Data layer (adapter-agnostic, shared with daemon)
 │   │   ├── index.ts                  # DB interface
 │   │   ├── adapters/                 # firebaseHosted / firebaseEmulator / leveldb
 │   │   ├── schemas/                  # Zod schemas
 │   │   └── migrations/               # Versioned migration scripts
-│   ├── engine/                       # Scheduler, runner, routing, recovery, metrics
-│   ├── steps/                        # Step executors (claude_skill, wait_external, etc.)
-│   └── config/                       # Config + workflow YAML loaders
-├── server.ts                         # Custom Next.js server — bootstraps engine before next()
+│   ├── engine/                       # Daemon-only: scheduler, runner, routing, recovery, metrics
+│   ├── steps/                        # Daemon-only: step executors (claude_skill, wait_external, etc.)
+│   ├── config/                       # Daemon-only: config + workflow YAML loaders
+│   └── cli/                          # Daemon-only: shepherd binary (commander)
 ├── workflows/                        # Workflow YAML definitions (base-pr, dependabot-pr, …)
 ├── config.yaml                       # Operator config (gitignored)
 ├── config.example.yaml               # Committed example
 ├── deployment/                       # Public env config (preview, production)
+├── firestore.rules                   # Rules: daemon-only writes, auth+allowlist reads
 └── …config files
 ```
 
-Domain code lands in `engine/`, `steps/`, and `db/`. UI work lives in `app/` and `components/`. The custom Next.js server (`server.ts`) bootstraps the engine before delegating HTTP to `next()` so both share a single process and Node runtime.
+Domain code lands in `engine/`, `steps/`, and `db/`. UI work lives in `app/`, `components/`, and `hooks/`. The `db/` module is shared between the daemon and the UI: the daemon uses the admin SDK adapter; the UI uses the client SDK against the same Firestore project. There is **no `server.ts`** — the daemon doesn't run an HTTP server; the UI runs standard `next start` on Vercel.
 
 ## Data Model
 
@@ -150,13 +167,29 @@ pnpm exec sync-env --rotate-keys --env=preview
 
 ## UI
 
-Three primary views (vision §7):
+The UI is a Next.js App Router app **deployed to Vercel**, separate from the daemon process. Three primary views (vision §7):
 
 - **`/` (Run List)** — All workflow runs with status, current step, timing badges. Child runs (fix PRs) indented under parents.
 - **`/runs/[id]` (Run Detail)** — Run metadata + step timeline. Click a step row to expand input/output/logs in a drawer.
 - **`/repos` (Repository List)** — Configured repos with enabled toggle, concurrency usage, 24h activity counts.
 
-Live updates flow through a Server-Sent Events endpoint at `app/api/events/route.ts`. The data layer's reactive subscriptions push changes; the UI's Zustand store patches the affected row without a full reload.
+Plus `/sign-in` — the public entry point for Firebase Auth (Google sign-in). The `AuthGate` component in the root layout redirects unauthenticated requests to `/sign-in`; the email allowlist in `firestore.rules` enforces the actual access control on data reads.
+
+### Live updates
+
+Live updates come from **Firestore `onSnapshot` subscriptions** in the client SDK — not SSE, not WebSockets, not a custom server. Whenever the daemon writes to `workflowRuns` or `stepInstances` via the admin SDK, Firestore pushes the delta to every subscribed client (laptop, phone, second monitor). The UI's Zustand store patches the affected row without a full reload.
+
+There is no SSE endpoint, no `app/api/events/route.ts`, and no daemon-side HTTP surface.
+
+### Operator → daemon control plane
+
+Operator actions that originate in the UI (toggling a repo's `enabled` flag, force-retrying a step, pausing the scheduler) flow through a `commands` collection in Firestore:
+
+1. UI writes a document to `commands/{commandId}` with the user's intent. An auth-only write rule on that path lets allowlisted operators write; nothing else is writable from the UI.
+2. The daemon's admin-SDK subscription on the `commands` collection picks up the new document and acts.
+3. The daemon deletes the command document after processing.
+
+This keeps the daemon truly headless — no HTTP endpoint to expose — while giving the UI a complete control surface.
 
 ## Timing Metrics
 

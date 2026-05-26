@@ -17,7 +17,7 @@ pnpm install
 cp .env.example .env.local            # Fill in Firebase + Sentry credentials
 cp config.example.yaml config.yaml    # Edit to declare repos to watch (gitignored)
 pnpm dev                              # UI only — boots Next.js without the engine
-shepherd start                        # Full daemon (engine + UI)
+shepherd start                        # Headless daemon (engine only; UI is deployed separately to Vercel)
 ```
 
 ## Development Workflow

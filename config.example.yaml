@@ -1,6 +1,11 @@
 # PR Shepherd operator config — copy this file to `config.yaml` and edit.
 # `config.yaml` is gitignored; this example is committed so the schema is
 # always discoverable. See ARCHITECTURE.md and vision issue #1 for details.
+#
+# This config is loaded by the **headless daemon only** (`shepherd start`).
+# The Vercel-hosted UI does not read this file — it is configured via
+# `NEXT_PUBLIC_FIREBASE_*` environment variables on the Vercel side.
+# See ARCHITECTURE.md (#deployment-topology) for the split.
 
 # Concurrency caps for Claude subprocess execution.
 concurrency:
@@ -29,12 +34,26 @@ poll:
 
 # Data store adapter. Three options, all behind the same `Db` interface in
 # `src/db/`. See ARCHITECTURE.md (#data-store) for trade-offs.
+#
+# The daemon uses the firebase-admin SDK against this store; the Vercel UI
+# uses the firebase client SDK against the same Firestore project. Both
+# read/write the same collections (`workflowRuns`, `stepInstances`,
+# `repositories`, `commands`) with rules-based separation.
 db:
   adapter: firebase-hosted # recommended default — managed Firestore (uses NEXT_PUBLIC_FIREBASE_* + service account)
   # adapter: firebase-emulator   # local Firestore via `firebase emulators:start`; requires firebase-tools
-  # adapter: leveldb             # embedded RxDB + LevelDB at logOverflowPath/../shepherd.db
+  # adapter: leveldb             # embedded RxDB + LevelDB at logOverflowPath/../shepherd.db (UI cannot read leveldb)
   logOverflowPath: ./data/logs # step-log sidecar files when in-doc storage overflows
 
-# Web server (UI + API + SSE).
-server:
-  port: 3847
+# Commands collection — the UI writes operator-action documents here
+# (toggle a repo's enabled flag, force-retry a step). The daemon subscribes
+# via admin SDK, applies the command, and deletes the document. The UI
+# never hits a daemon-side HTTP endpoint; this Firestore-based channel is
+# the entire operator → daemon control plane.
+commands:
+  collectionPath: commands # Firestore collection the daemon watches for UI-issued commands
+  pollIntervalSeconds: 5 # not used when adapter is firebase-hosted (onSnapshot is push); applies to leveldb adapter only
+
+
+# There is no `server` block: the daemon does **not** host an HTTP server.
+# The UI runs on Vercel as a standard Next.js deployment.
