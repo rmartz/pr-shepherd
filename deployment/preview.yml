@@ -28,6 +28,5 @@ variables:
   SENTRY_PROJECT: ""
 
   # Add project-specific public variables here as needed, for example:
-  # NEXT_PUBLIC_FIREBASE_DATABASE_URL: ""   # Realtime Database (see issue #42)
   # NEXT_PUBLIC_DEBUG_MODE: "false"
   # NEXT_PUBLIC_VERCEL_ENV: "preview"

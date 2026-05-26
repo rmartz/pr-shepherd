@@ -3,9 +3,9 @@
 # All keys in those files must match at least one allowed_pattern OR appear in allowed_keys.
 # Keys matching any denied_pattern are rejected even if they match an allowed_pattern.
 #
-# To add a new public variable (e.g. NEXT_PUBLIC_FIREBASE_DATABASE_URL or
-# NEXT_PUBLIC_DEBUG_MODE): add it to the config file — no schema change needed,
-# because NEXT_PUBLIC_* is already an allowed pattern.
+# To add a new public variable (e.g. NEXT_PUBLIC_DEBUG_MODE): add it to the
+# config file — no schema change needed, because NEXT_PUBLIC_* is already an
+# allowed pattern.
 #
 # To add a server-side non-sensitive variable (e.g. FIREBASE_PROJECT_ID):
 # add it to allowed_keys below with a comment explaining why it is safe to commit.
@@ -19,7 +19,6 @@ allowed_patterns:
 # These are identifiers / slugs, not credentials.
 allowed_keys:
   - FIREBASE_PROJECT_ID # Non-sensitive; also exposed via NEXT_PUBLIC_FIREBASE_PROJECT_ID
-  - FIREBASE_DATABASE_URL # Non-sensitive RTDB URL; also exposed as NEXT_PUBLIC_FIREBASE_DATABASE_URL when used client-side
   - SENTRY_ORG # Sentry organisation slug — not a credential
   - SENTRY_PROJECT # Sentry project slug — not a credential
 
