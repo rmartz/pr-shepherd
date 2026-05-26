@@ -172,3 +172,19 @@ describe("applyMigrations runs migrations in ascending version order regardless 
     expect(callOrder).toEqual([1, 2]);
   });
 });
+
+describe("applyMigrations rejects when the stamped version exceeds the highest available migration", () => {
+  it("throws a descriptive downgrade error and runs no migrations", async () => {
+    const { db, setCollectionMeta } = makeDb({ testCol: 5 });
+    const m1 = makeMigration(1);
+    const m2 = makeMigration(2);
+
+    await expect(applyMigrations(db, { testCol: [m1, m2] })).rejects.toThrow(
+      'Unsupported downgrade: collection "testCol" is at schema version 5 but highest available migration is 2',
+    );
+
+    expect(m1.up).not.toHaveBeenCalled();
+    expect(m2.up).not.toHaveBeenCalled();
+    expect(setCollectionMeta).not.toHaveBeenCalled();
+  });
+});
