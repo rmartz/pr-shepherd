@@ -18,7 +18,7 @@ export function getClientApp(): FirebaseApp {
 // Auth accessor — used by the Vercel-hosted UI to gate access to Firestore
 // reads. Firebase Auth tokens populate `request.auth` in `firestore.rules`,
 // where an email allowlist further restricts who can read the daemon
-// collections. See firestore.rules and ARCHITECTURE.md (#auth) for the model.
+// collections. See `firestore.rules` (`isAllowedOperator()`) for the model.
 export function getClientAuth(): Auth {
   return getAuth(getClientApp());
 }

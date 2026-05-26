@@ -61,6 +61,11 @@ describe("SignInPage triggers Firebase popup sign-in when the button is clicked"
       screen.getByRole("button", { name: SIGN_IN_COPY.buttonGoogle }),
     );
     expect(mockSignInWithPopup).toHaveBeenCalledTimes(1);
+    const [, provider] = mockSignInWithPopup.mock.calls[0] as [
+      unknown,
+      { providerId: string },
+    ];
+    expect(provider.providerId).toBe("google.com");
     // TODO: upgrade to userEvent.click when @testing-library/user-event is available
   });
 });

@@ -24,7 +24,8 @@ rules_version = '2';
 // `isAllowedOperator()` restricts read access to a hardcoded list of
 // email addresses. To grant a new operator access:
 //
-//   1. Add the email to the `allowedEmails` list below (lowercase, exact match).
+//   1. Add the email to the inline `email in [...]` list inside
+//      `isAllowedOperator()` below (lowercase, exact match).
 //   2. Re-deploy these rules: `firebase deploy --only firestore:rules`.
 //   3. The new operator can sign in via the UI's /sign-in page using their
 //      Google account associated with that email.
