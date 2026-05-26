@@ -47,5 +47,13 @@ export function createDb(config: DbConfig): Db {
       throw new Error(
         `Adapter "leveldb" is out of scope for v1 — see Epic 2 stretch goal.`,
       );
+    default: {
+      // Exhaustiveness guard: any new `DbAdapterKind` value must add a
+      // corresponding case above. Without this, a config value that
+      // arrives via type assertion or untyped YAML parse would fall
+      // through and return `undefined` despite the `Db` return type.
+      const _exhaustive: never = config.adapter;
+      throw new Error(`Unknown db adapter: ${String(_exhaustive)}`);
+    }
   }
 }

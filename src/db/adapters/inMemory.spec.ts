@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createInMemoryDb } from "./inMemory";
+import { createDb } from "../index";
 import { Collections } from "../collections";
 import type { Repository } from "../schemas";
 
@@ -145,5 +146,99 @@ describe("Db subscription dispatch on the in-memory adapter", () => {
     expect(lastCall?.[0]).toHaveLength(1);
     expect(lastCall?.[0][0].owner).toBe("a");
     unsubscribe();
+  });
+});
+
+describe("Filter handles undefined values as 'not specified'", () => {
+  it("ignores a filter key whose value is undefined", async () => {
+    const db = createInMemoryDb();
+    await db.create(
+      Collections.repositories,
+      makeRepo({ id: "a/x", owner: "a" }),
+    );
+    await db.create(
+      Collections.repositories,
+      makeRepo({ id: "b/y", owner: "b" }),
+    );
+    const owner: string | undefined = undefined;
+    const result = await db.list(Collections.repositories, { owner });
+    expect(result).toHaveLength(2);
+  });
+});
+
+describe("update rejects patching the collection id field", () => {
+  it("throws when patch attempts to change the id to a different value", async () => {
+    const db = createInMemoryDb();
+    const repo = makeRepo({ id: "a/x", owner: "a" });
+    await db.create(Collections.repositories, repo);
+    await expect(
+      db.update(Collections.repositories, "a/x", { id: "b/y" }),
+    ).rejects.toThrow(/Cannot change/);
+  });
+
+  it("allows a patch whose id field matches the document key (no-op)", async () => {
+    const db = createInMemoryDb();
+    const repo = makeRepo({ id: "a/x", owner: "a" });
+    await db.create(Collections.repositories, repo);
+    await db.update(Collections.repositories, "a/x", {
+      id: "a/x",
+      concurrencyMax: 8,
+    });
+    const updated = await db.get(Collections.repositories, "a/x");
+    expect(updated?.concurrencyMax).toBe(8);
+  });
+});
+
+describe("notify() snapshots the subscription list", () => {
+  it("dispatches to every subscriber when one unsubscribes from inside its own callback", async () => {
+    const db = createInMemoryDb();
+    const firstSeen: number[] = [];
+    const secondSeen: number[] = [];
+    const unsubscribeFirst = db.subscribe(
+      Collections.repositories,
+      undefined,
+      (docs) => {
+        firstSeen.push(docs.length);
+        // Unsubscribing during the first dispatch must not cause the
+        // second subscriber to be skipped on this same notification.
+        if (docs.length === 1) unsubscribeFirst();
+      },
+    );
+    const unsubscribeSecond = db.subscribe(
+      Collections.repositories,
+      undefined,
+      (docs) => {
+        secondSeen.push(docs.length);
+      },
+    );
+    firstSeen.length = 0;
+    secondSeen.length = 0;
+    await db.create(Collections.repositories, makeRepo());
+    expect(firstSeen).toEqual([1]);
+    expect(secondSeen).toEqual([1]);
+    unsubscribeSecond();
+  });
+});
+
+describe("createDb factory exhaustiveness", () => {
+  it("returns the in-memory adapter for the in-memory kind", () => {
+    expect(createDb({ adapter: "in-memory" })).toBeDefined();
+  });
+
+  it("throws a clear error for an unknown adapter value", () => {
+    expect(() =>
+      createDb({
+        adapter: "unknown-adapter" as unknown as "in-memory",
+      }),
+    ).toThrow(/Unknown db adapter/);
+  });
+});
+
+describe("create() rejects documents whose id field is not a non-empty string", () => {
+  it("throws when the id field parses to an empty string", async () => {
+    const db = createInMemoryDb();
+    await expect(
+      db.create(Collections.repositories, makeRepo({ id: "" })),
+    ).rejects.toThrow();
   });
 });
