@@ -30,6 +30,11 @@ describe("RepositorySchema round-trip and rejection", () => {
     delete invalid["owner"];
     expect(() => RepositorySchema.parse(invalid)).toThrow();
   });
+
+  it("rejects a repository with an unknown field", () => {
+    const withExtra = { ...valid, unknownField: "extra" };
+    expect(() => RepositorySchema.parse(withExtra)).toThrow();
+  });
 });
 
 describe("WorkflowRunSchema round-trip and rejection", () => {
@@ -65,6 +70,11 @@ describe("WorkflowRunSchema round-trip and rejection", () => {
   it("rejects a workflow run with an unknown status enum value", () => {
     const invalid = { ...valid, status: "exploded" };
     expect(() => WorkflowRunSchema.parse(invalid)).toThrow();
+  });
+
+  it("rejects a workflow run with an unknown field", () => {
+    const withExtra = { ...valid, unknownField: "extra" };
+    expect(() => WorkflowRunSchema.parse(withExtra)).toThrow();
   });
 });
 
@@ -106,6 +116,11 @@ describe("StepInstanceSchema round-trip and rejection", () => {
     const invalid = { ...valid, stepType: "telepathy" };
     expect(() => StepInstanceSchema.parse(invalid)).toThrow();
   });
+
+  it("rejects a step instance with an unknown field", () => {
+    const withExtra = { ...valid, unknownField: "extra" };
+    expect(() => StepInstanceSchema.parse(withExtra)).toThrow();
+  });
 });
 
 describe("WorkflowDefinitionSchema round-trip and rejection", () => {
@@ -126,5 +141,10 @@ describe("WorkflowDefinitionSchema round-trip and rejection", () => {
     const invalid: Record<string, unknown> = { ...valid };
     delete invalid["source"];
     expect(() => WorkflowDefinitionSchema.parse(invalid)).toThrow();
+  });
+
+  it("rejects a workflow definition with an unknown field", () => {
+    const withExtra = { ...valid, unknownField: "extra" };
+    expect(() => WorkflowDefinitionSchema.parse(withExtra)).toThrow();
   });
 });
