@@ -5,7 +5,7 @@ import {
 } from "./hostedFirestore";
 import { createDb } from "../index";
 import { Collections } from "../collections";
-import type { Repository } from "../schemas";
+import { RunStatus, type Repository, type WorkflowRun } from "../schemas";
 
 // ---------------------------------------------------------------------------
 // Unit tests for the hosted Firestore adapter.
@@ -269,7 +269,9 @@ describe("Writes go through the injected admin Firestore handle", () => {
     });
     const repo = makeRepo({ id: "a/x", owner: "a" });
     await db.create(Collections.repositories, repo);
-    expect(store.get("repositories")?.get("a/x")).toEqual(repo);
+    expect(store.get("repositories")?.get(encodeURIComponent("a/x"))).toEqual(
+      repo,
+    );
   });
 
   it("update() merges patch into the existing admin doc", async () => {
@@ -282,7 +284,9 @@ describe("Writes go through the injected admin Firestore handle", () => {
     const repo = makeRepo({ concurrencyMax: 2 });
     await db.create(Collections.repositories, repo);
     await db.update(Collections.repositories, repo.id, { concurrencyMax: 7 });
-    const stored = store.get("repositories")?.get(repo.id) as Repository;
+    const stored = store
+      .get("repositories")
+      ?.get(encodeURIComponent(repo.id)) as Repository;
     expect(stored.concurrencyMax).toBe(7);
     expect(stored.owner).toBe(repo.owner);
   });
@@ -297,7 +301,47 @@ describe("Writes go through the injected admin Firestore handle", () => {
     const repo = makeRepo();
     await db.create(Collections.repositories, repo);
     await db.delete(Collections.repositories, repo.id);
-    expect(store.get("repositories")?.has(repo.id)).toBe(false);
+    expect(store.get("repositories")?.has(encodeURIComponent(repo.id))).toBe(
+      false,
+    );
+  });
+
+  it("strips undefined fields before persisting", async () => {
+    const { store, fakeFirestore: adminFs } = makeFakeAdmin();
+    const client = makeFakeClient(store);
+    const db = createHostedFirestoreDb({
+      adminFirestore: adminFs,
+      clientFirestoreModule: client,
+    });
+    const run: WorkflowRun = {
+      id: "run/1",
+      workflowId: "base-pr",
+      workflowVersion: 1,
+      repo: "rmartz/pr-shepherd",
+      prNumber: 50,
+      prTitle: "test",
+      status: RunStatus.Pending,
+      parentRunId: undefined,
+      childRunIds: [],
+      context: {},
+      currentStepId: undefined,
+      createdAt: 1,
+      updatedAt: 1,
+      completedAt: undefined,
+      metrics: {
+        totalClaudeMs: 0,
+        totalActiveMs: 0,
+        totalScheduleWaitMs: 0,
+        totalExternalWaitMs: 0,
+      },
+    };
+    await db.create(Collections.workflowRuns, run);
+    const stored = store
+      .get("workflowRuns")
+      ?.get(encodeURIComponent(run.id)) as Record<string, unknown>;
+    expect(stored).not.toHaveProperty("parentRunId");
+    expect(stored).not.toHaveProperty("currentStepId");
+    expect(stored).not.toHaveProperty("completedAt");
   });
 
   it("get() returns the parsed document by id", async () => {
@@ -500,7 +544,9 @@ describe("Generic CRUD surface keys storage by collection name", () => {
       clientFirestoreModule: client,
     });
     await db.create(Collections.repositories, makeRepo({ id: "owner/repo" }));
-    expect(store.get("repositories")?.has("owner/repo")).toBe(true);
+    expect(
+      store.get("repositories")?.has(encodeURIComponent("owner/repo")),
+    ).toBe(true);
   });
 });
 

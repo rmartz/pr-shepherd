@@ -102,7 +102,25 @@ function loadDefaultClient(): {
   };
 }
 
-class HostedFirestoreDb implements Db {
+function stripUndefinedDeep(value: unknown): unknown {
+  if (value === undefined) return undefined;
+  if (Array.isArray(value)) {
+    return value
+      .map((entry) => stripUndefinedDeep(entry))
+      .filter((entry) => entry !== undefined);
+  }
+  if (value !== null && typeof value === "object") {
+    const out: Record<string, unknown> = {};
+    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
+      const cleaned = stripUndefinedDeep(v);
+      if (cleaned !== undefined) out[k] = cleaned;
+    }
+    return out;
+  }
+  return value;
+}
+
+export class HostedFirestoreDb implements Db {
   private readonly admin: AdminFirestoreLike;
   private readonly clientMod: ClientFirestoreModule;
   private readonly clientFs: unknown;
@@ -129,6 +147,10 @@ class HostedFirestoreDb implements Db {
     return raw;
   }
 
+  private toDocKey(id: string): string {
+    return encodeURIComponent(id);
+  }
+
   private filterEntries<T>(
     filter: Filter<T> | undefined,
   ): { field: string; value: unknown }[] {
@@ -146,7 +168,10 @@ class HostedFirestoreDb implements Db {
   }
 
   async get<T>(coll: CollectionDef<T>, id: string): Promise<T | undefined> {
-    const snap = await this.admin.collection(coll.name).doc(id).get();
+    const snap = await this.admin
+      .collection(coll.name)
+      .doc(this.toDocKey(id))
+      .get();
     if (!snap.exists) return undefined;
     return coll.schema.parse(snap.data());
   }
@@ -163,7 +188,10 @@ class HostedFirestoreDb implements Db {
   async create<T>(coll: CollectionDef<T>, doc: T): Promise<void> {
     const parsed = coll.schema.parse(doc);
     const id = this.extractId(coll, parsed);
-    await this.admin.collection(coll.name).doc(id).set(parsed);
+    await this.admin
+      .collection(coll.name)
+      .doc(this.toDocKey(id))
+      .set(stripUndefinedDeep(parsed));
   }
 
   async update<T>(
@@ -187,18 +215,18 @@ class HostedFirestoreDb implements Db {
     // shape, but we want the merged document to conform to the schema before
     // persisting. The extra round-trip is acceptable for the daemon's
     // write volume.
-    const docRef = this.admin.collection(coll.name).doc(id);
+    const docRef = this.admin.collection(coll.name).doc(this.toDocKey(id));
     const snap = await docRef.get();
     if (!snap.exists) {
       throw new Error(`Document ${id} not found in ${coll.name}`);
     }
     const merged = { ...(snap.data() as object), ...patch };
     const parsed = coll.schema.parse(merged);
-    await docRef.set(parsed);
+    await docRef.set(stripUndefinedDeep(parsed));
   }
 
   async delete<T>(coll: CollectionDef<T>, id: string): Promise<void> {
-    await this.admin.collection(coll.name).doc(id).delete();
+    await this.admin.collection(coll.name).doc(this.toDocKey(id)).delete();
   }
 
   subscribe<T>(

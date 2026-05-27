@@ -1,4 +1,4 @@
-import { describe, it, expect, vi, beforeAll, afterAll } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   createHostedFirestoreDb,
   type HostedFirestoreDbOptions,
@@ -32,23 +32,6 @@ async function emulatorReachable(): Promise<boolean> {
   }
 }
 
-let noEmulator = true;
-
-beforeAll(async () => {
-  noEmulator = !(await emulatorReachable());
-  if (noEmulator) return;
-  // Point the admin SDK at the emulator. Setting both env vars is what the
-  // SDK reads on initialization, so we set them before importing the
-  // Firebase modules below.
-  process.env["FIRESTORE_EMULATOR_HOST"] = EMULATOR_HOST;
-  process.env["FIREBASE_PROJECT_ID"] = "demo-pr-shepherd-emulator";
-});
-
-afterAll(() => {
-  // No teardown needed — the emulator persists state across runs of this
-  // file and other suites; tests below use unique ids to avoid collisions.
-});
-
 function makeRepo(overrides: Partial<Repository> = {}): Repository {
   return {
     id: `int-${Date.now()}-${Math.floor(Math.random() * 1e6)}`,
@@ -63,94 +46,97 @@ function makeRepo(overrides: Partial<Repository> = {}): Repository {
 }
 
 describe("HostedFirestoreDb integration with the Firebase Emulator", () => {
-  it.skipIf(noEmulator)(
-    "write-then-subscribe round-trip including unsubscribe",
-    async () => {
-      // Lazy-import so the unit suite never loads the real Firebase modules.
-      const { initializeApp, getApps } = await import("firebase/app");
-      const {
-        getFirestore,
-        connectFirestoreEmulator,
-        // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      } = (await import("firebase/firestore")) as any;
-      const adminApp = await import("firebase-admin/app");
-      const adminFs = await import("firebase-admin/firestore");
+  it("write-then-subscribe round-trip including unsubscribe", async () => {
+    if (!(await emulatorReachable())) return;
+    // Point the admin SDK at the emulator. Setting both env vars is what the
+    // SDK reads on initialization, so we set them before importing the
+    // Firebase modules below.
+    process.env["FIRESTORE_EMULATOR_HOST"] = EMULATOR_HOST;
+    process.env["FIREBASE_PROJECT_ID"] = "demo-pr-shepherd-emulator";
 
-      // Initialize the admin SDK pointing at the emulator (no credential
-      // required — the emulator accepts the default project).
-      if (
-        adminApp.getApps().find((a) => a.name === "[DEFAULT]") === undefined
-      ) {
-        adminApp.initializeApp({
-          projectId: process.env["FIREBASE_PROJECT_ID"],
-        });
-      }
-      const admin = adminFs.getFirestore();
-
-      // Initialize the client SDK pointing at the same emulator.
-      const clientApp =
-        getApps().find((a) => a.name === "int-test") ??
-        initializeApp(
-          { projectId: process.env["FIREBASE_PROJECT_ID"] },
-          "int-test",
-        );
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      const client = getFirestore(clientApp);
-      const [host, portStr] = EMULATOR_HOST.split(":");
-      // eslint-disable-next-line @typescript-eslint/no-unsafe-call
-      connectFirestoreEmulator(client, host, Number(portStr));
-
+    // Lazy-import so the unit suite never loads the real Firebase modules.
+    const { initializeApp, getApps } = await import("firebase/app");
+    const {
+      getFirestore,
+      connectFirestoreEmulator,
       // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      const clientMod = (await import("firebase/firestore")) as any;
+    } = (await import("firebase/firestore")) as any;
+    const adminApp = await import("firebase-admin/app");
+    const adminFs = await import("firebase-admin/firestore");
 
-      const db = createHostedFirestoreDb({
-        adminFirestore:
-          admin as unknown as HostedFirestoreDbOptions["adminFirestore"],
-        clientFirestoreModule: clientMod,
-        clientFirestore: client,
+    // Initialize the admin SDK pointing at the emulator (no credential
+    // required — the emulator accepts the default project).
+    if (adminApp.getApps().find((a) => a.name === "[DEFAULT]") === undefined) {
+      adminApp.initializeApp({
+        projectId: process.env["FIREBASE_PROJECT_ID"],
       });
+    }
+    const admin = adminFs.getFirestore();
 
-      const repo = makeRepo();
-      const onChange = vi.fn();
+    // Initialize the client SDK pointing at the same emulator.
+    const clientApp =
+      getApps().find((a) => a.name === "int-test") ??
+      initializeApp(
+        { projectId: process.env["FIREBASE_PROJECT_ID"] },
+        "int-test",
+      );
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    const client = getFirestore(clientApp);
+    const [host, portStr] = EMULATOR_HOST.split(":");
+    // eslint-disable-next-line @typescript-eslint/no-unsafe-call
+    connectFirestoreEmulator(client, host, Number(portStr));
 
-      const unsubscribe = db.subscribe(
-        Collections.repositories,
-        { id: repo.id },
-        onChange,
+    // eslint-disable-next-line @typescript-eslint/no-explicit-any
+    const clientMod = (await import("firebase/firestore")) as any;
+
+    const db = createHostedFirestoreDb({
+      adminFirestore:
+        admin as unknown as HostedFirestoreDbOptions["adminFirestore"],
+      clientFirestoreModule: clientMod,
+      clientFirestore: client,
+    });
+
+    const repo = makeRepo();
+    const onChange = vi.fn();
+
+    const unsubscribe = db.subscribe(
+      Collections.repositories,
+      undefined,
+      onChange,
+    );
+
+    try {
+      await db.create(Collections.repositories, repo);
+
+      // Wait for the snapshot to arrive — onSnapshot is push-based but the
+      // emulator round-trip has a small delay.
+      await vi.waitFor(
+        () => {
+          const last = onChange.mock.calls.at(-1);
+          expect(last?.[0]?.length).toBeGreaterThanOrEqual(1);
+        },
+        { timeout: 5000, interval: 100 },
       );
 
-      try {
-        await db.create(Collections.repositories, repo);
+      const last = onChange.mock.calls.at(-1);
+      expect(last?.[0]?.[0]?.id).toBe(repo.id);
 
-        // Wait for the snapshot to arrive — onSnapshot is push-based but the
-        // emulator round-trip has a small delay.
-        await vi.waitFor(
-          () => {
-            const last = onChange.mock.calls.at(-1);
-            expect(last?.[0]?.length).toBeGreaterThanOrEqual(1);
-          },
-          { timeout: 5000, interval: 100 },
-        );
-
-        const last = onChange.mock.calls.at(-1);
-        expect(last?.[0]?.[0]?.id).toBe(repo.id);
-
-        // Verify the unsubscribe path: after unsubscribing, a subsequent
-        // create on a different id should NOT trigger our callback.
-        unsubscribe();
-        onChange.mockClear();
-        await db.create(Collections.repositories, makeRepo());
-        // Give the emulator time to fire any pending snapshots; if our
-        // unsubscribe is wired correctly, none should arrive.
-        await new Promise((r) => setTimeout(r, 500));
-        expect(onChange).not.toHaveBeenCalled();
-      } finally {
-        unsubscribe();
-        await db.delete(Collections.repositories, repo.id).catch(() => {
-          // best-effort cleanup
-        });
-      }
-    },
-    15000,
-  );
+      // Verify the unsubscribe path: after unsubscribing, even writes that
+      // would otherwise match must not trigger our callback.
+      unsubscribe();
+      onChange.mockClear();
+      await db.update(Collections.repositories, repo.id, {
+        concurrencyMax: repo.concurrencyMax + 1,
+      });
+      // Give the emulator time to fire any pending snapshots; if our
+      // unsubscribe is wired correctly, none should arrive.
+      await new Promise((r) => setTimeout(r, 500));
+      expect(onChange).not.toHaveBeenCalled();
+    } finally {
+      unsubscribe();
+      await db.delete(Collections.repositories, repo.id).catch(() => {
+        // best-effort cleanup
+      });
+    }
+  }, 15000);
 });
