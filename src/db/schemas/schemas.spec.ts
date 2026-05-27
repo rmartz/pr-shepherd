@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import {
+  MetaDocSchema,
   RepositorySchema,
   WorkflowRunSchema,
   StepInstanceSchema,
@@ -8,6 +9,31 @@ import {
   StepStatus,
   StepType,
 } from "./index";
+
+describe("MetaDocSchema round-trip and rejection", () => {
+  const valid = {
+    id: "workflowRuns",
+    collectionName: "workflowRuns",
+    schemaVersion: 3,
+    updatedAt: 1716700000000,
+  };
+
+  it("parses a representative valid meta document", () => {
+    const parsed = MetaDocSchema.parse(valid);
+    expect(parsed).toEqual(valid);
+  });
+
+  it("rejects a meta document with an unknown field", () => {
+    const withExtra = { ...valid, unknownField: "extra" };
+    expect(() => MetaDocSchema.parse(withExtra)).toThrow();
+  });
+
+  it("rejects a meta document with a negative schemaVersion", () => {
+    expect(() =>
+      MetaDocSchema.parse({ ...valid, schemaVersion: -1 }),
+    ).toThrow();
+  });
+});
 
 describe("RepositorySchema round-trip and rejection", () => {
   const valid = {
