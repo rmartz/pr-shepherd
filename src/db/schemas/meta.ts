@@ -9,7 +9,6 @@ import { z } from "zod";
 export const MetaDocSchema = z
   .object({
     id: z.string().min(1),
-    collectionName: z.string().min(1),
     schemaVersion: z.number().int().nonnegative(),
     updatedAt: z.number().int().nonnegative(),
   })

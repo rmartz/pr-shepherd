@@ -80,7 +80,6 @@ describe("runMigrations on a partially-migrated DB applies only newer ones", () 
     // Pre-stamp the collection at version 2.
     await db.create(Collections.meta, {
       id: Collections.workflowRuns.name,
-      collectionName: Collections.workflowRuns.name,
       schemaVersion: 2,
       updatedAt: 1716700000000,
     });
@@ -100,7 +99,6 @@ describe("runMigrations on a partially-migrated DB applies only newer ones", () 
     const db = createInMemoryDb();
     await db.create(Collections.meta, {
       id: Collections.workflowRuns.name,
-      collectionName: Collections.workflowRuns.name,
       schemaVersion: 1,
       updatedAt: 1716700000000,
     });
@@ -186,5 +184,38 @@ describe("runMigrations rejects malformed migration sets", () => {
         [Collections.workflowRuns.name]: [makeMigration(0)],
       }),
     ).rejects.toThrow(/version/i);
+  });
+});
+
+describe("runMigrations aborts on downgrade (stamped version newer than binary)", () => {
+  it("throws with a clear error when the stamped version exceeds the highest known migration", async () => {
+    const db = createInMemoryDb();
+    // DB was migrated to v5 by a newer daemon; this binary only knows
+    // up to v2 — running forward-only migrations against an unknown
+    // newer schema would be unsafe.
+    await db.create(Collections.meta, {
+      id: Collections.workflowRuns.name,
+      schemaVersion: 5,
+      updatedAt: 1716700000000,
+    });
+    await expect(
+      runMigrations(db, {
+        [Collections.workflowRuns.name]: [makeMigration(1), makeMigration(2)],
+      }),
+    ).rejects.toThrow(/Unsupported downgrade.*workflowRuns.*5.*2/);
+  });
+
+  it("throws when the binary has no migrations for the collection but the DB is stamped at any version", async () => {
+    const db = createInMemoryDb();
+    await db.create(Collections.meta, {
+      id: Collections.workflowRuns.name,
+      schemaVersion: 1,
+      updatedAt: 1716700000000,
+    });
+    await expect(
+      runMigrations(db, {
+        [Collections.workflowRuns.name]: [],
+      }),
+    ).rejects.toThrow(/Unsupported downgrade/);
   });
 });

@@ -60,7 +60,6 @@ async function stampVersion(
   if (existing === undefined) {
     await db.create(Collections.meta, {
       id: collectionName,
-      collectionName,
       schemaVersion: version,
       updatedAt: now,
     });
@@ -98,6 +97,18 @@ export async function runMigrations(
     validateMigrations(collectionName, migrations);
     const sorted = [...migrations].sort((a, b) => a.version - b.version);
     const currentVersion = await readCurrentVersion(db, collectionName);
+    // Downgrade detection: if the stamped version is higher than any
+    // migration this daemon knows about, the binary is older than the
+    // schema (e.g. a deploy rolled back while the DB stayed forward).
+    // Forward-only migrations can't safely run against an unknown
+    // newer schema — abort startup rather than silently proceeding.
+    const lastMigration = sorted[sorted.length - 1];
+    const maxKnownVersion = lastMigration?.version ?? 0;
+    if (currentVersion > maxKnownVersion) {
+      throw new Error(
+        `Unsupported downgrade for collection "${collectionName}": stamped schemaVersion ${String(currentVersion)} exceeds highest known migration ${String(maxKnownVersion)}. This daemon binary is older than the database schema; deploy a newer daemon or restore the database to a compatible version.`,
+      );
+    }
     const pending = sorted.filter((m) => m.version > currentVersion);
     applied[collectionName] = [];
     for (const migration of pending) {

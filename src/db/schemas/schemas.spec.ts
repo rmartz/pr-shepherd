@@ -13,7 +13,6 @@ import {
 describe("MetaDocSchema round-trip and rejection", () => {
   const valid = {
     id: "workflowRuns",
-    collectionName: "workflowRuns",
     schemaVersion: 3,
     updatedAt: 1716700000000,
   };
