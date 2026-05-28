@@ -41,9 +41,17 @@ poll:
 # `repositories`, `commands`) with rules-based separation.
 db:
   adapter: firebase-hosted # recommended default — managed Firestore (uses NEXT_PUBLIC_FIREBASE_* + service account)
-  # adapter: firebase-emulator   # local Firestore via `firebase emulators:start`; requires firebase-tools
+  # adapter: firebase-emulator   # local Firestore via `firebase emulators:start`; requires firebase-tools — see docs/local-development.md
   # adapter: leveldb             # embedded RxDB + LevelDB at logOverflowPath/../shepherd.db (UI cannot read leveldb)
   logOverflowPath: ./data/logs # step-log sidecar files when in-doc storage overflows
+
+  # Optional emulator-only settings. Consulted only when `adapter` is
+  # `firebase-emulator`. The host/port must match the Firestore emulator
+  # binding (see `firebase.json` -> emulators.firestore). The daemon
+  # writes `FIRESTORE_EMULATOR_HOST` so the firebase-admin SDK auto-routes,
+  # and calls `connectFirestoreEmulator()` on the client SDK on first use.
+  emulator:
+    firestoreHost: localhost:8080
 
 # Commands collection — the UI writes operator-action documents here
 # (toggle a repo's enabled flag, force-retry a step). The daemon subscribes

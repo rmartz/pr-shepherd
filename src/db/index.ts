@@ -31,9 +31,22 @@ export type DbAdapterKind =
   | "in-memory"
   | "leveldb";
 
+// Optional emulator configuration. Only consulted when
+// `adapter == "firebase-emulator"`. `firestoreHost` may be a `host:port`
+// string (e.g. `127.0.0.1:8080`); the daemon translates it to
+// `FIRESTORE_EMULATOR_HOST` for the admin SDK and to a
+// `connectFirestoreEmulator(client, host, port)` call for the UI client
+// SDK (see `src/lib/firebase/client.ts`).
+export interface EmulatorConfig {
+  firestoreHost?: string;
+}
+
 export interface DbConfig {
   adapter: DbAdapterKind;
+  emulator?: EmulatorConfig;
 }
+
+const DEFAULT_EMULATOR_FIRESTORE_HOST = "localhost:8080";
 
 export function createDb(config: DbConfig): Db {
   switch (config.adapter) {
@@ -41,10 +54,18 @@ export function createDb(config: DbConfig): Db {
       return createHostedFirestoreDb();
     case "in-memory":
       return createInMemoryDb();
-    case "firebase-emulator":
-      throw new Error(
-        `Adapter "firebase-emulator" not yet implemented — see issue #39.`,
-      );
+    case "firebase-emulator": {
+      // The Firebase admin SDK reads `FIRESTORE_EMULATOR_HOST` natively
+      // and routes every collection/doc call to the emulator when set.
+      // The client SDK (see `getClientFirestore`) checks the same env
+      // var on first call and invokes `connectFirestoreEmulator` —
+      // setting the variable here is what makes the otherwise-identical
+      // hosted adapter point at the local emulator.
+      const host =
+        config.emulator?.firestoreHost ?? DEFAULT_EMULATOR_FIRESTORE_HOST;
+      process.env["FIRESTORE_EMULATOR_HOST"] = host;
+      return createHostedFirestoreDb();
+    }
     case "leveldb":
       throw new Error(
         `Adapter "leveldb" is out of scope for v1 — see Epic 2 stretch goal.`,
