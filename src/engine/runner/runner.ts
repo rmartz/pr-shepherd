@@ -91,8 +91,15 @@ async function completeStep(
   result: ExecutorResult,
 ): Promise<void> {
   const completedAt = Date.now();
-  const stepDelta = computeStepMetrics({ ...step, completedAt });
-  const nextStepMetrics = addStepDelta(step.metrics, stepDelta);
+  // Re-read the step before computing the terminal delta so any
+  // `waitingAt` (or other lifecycle timestamp) the executor wrote
+  // during execution is reflected in the rollup. Proper executor-side
+  // heartbeat / waiting persistence is tracked in #78; once that lands,
+  // executors that need to mark themselves `waiting` will do so via the
+  // runtime handle and the re-read here will pick it up.
+  const fresh = (await db.get(Collections.stepInstances, step.id)) ?? step;
+  const stepDelta = computeStepMetrics({ ...fresh, completedAt });
+  const nextStepMetrics = addStepDelta(fresh.metrics, stepDelta);
   await db.update(Collections.stepInstances, step.id, {
     status: StepStatus.Completed,
     output: result.output,
@@ -114,6 +121,9 @@ async function completeStep(
     return;
   }
   const nextRunMetrics = applyStepDelta(run.metrics, stepDelta);
+  // Non-atomic read-modify-write: concurrent terminal completions on the
+  // same run can race and drop a delta from the rollup. Tracked in #79
+  // (atomic `db.increment` primitive on the Db adapter).
   await db.update(Collections.workflowRuns, step.runId, {
     context: { ...run.context, ...result.output },
     metrics: nextRunMetrics,
@@ -127,12 +137,15 @@ async function failStep(
   message: string,
 ): Promise<void> {
   const completedAt = Date.now();
-  const stepDelta = computeStepMetrics({ ...step, completedAt });
-  const nextStepMetrics = addStepDelta(step.metrics, stepDelta);
+  // Same re-read pattern as completeStep: pick up any `waitingAt` the
+  // executor managed to persist before failing. See #78.
+  const fresh = (await db.get(Collections.stepInstances, step.id)) ?? step;
+  const stepDelta = computeStepMetrics({ ...fresh, completedAt });
+  const nextStepMetrics = addStepDelta(fresh.metrics, stepDelta);
   await db.update(Collections.stepInstances, step.id, {
     status: StepStatus.Failed,
     error: message,
-    retryCount: step.retryCount + 1,
+    retryCount: fresh.retryCount + 1,
     completedAt,
     metrics: nextStepMetrics,
   });
@@ -141,6 +154,7 @@ async function failStep(
     return;
   }
   const nextRunMetrics = applyStepDelta(run.metrics, stepDelta);
+  // Non-atomic read-modify-write — see comment in completeStep. #79.
   await db.update(Collections.workflowRuns, step.runId, {
     metrics: nextRunMetrics,
     updatedAt: completedAt,
