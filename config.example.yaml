@@ -47,9 +47,14 @@ db:
 
   # Optional emulator-only settings. Consulted only when `adapter` is
   # `firebase-emulator`. The host/port must match the Firestore emulator
-  # binding (see `firebase.json` -> emulators.firestore). The daemon
-  # writes `FIRESTORE_EMULATOR_HOST` so the firebase-admin SDK auto-routes,
-  # and calls `connectFirestoreEmulator()` on the client SDK on first use.
+  # binding (see `firebase.json` -> emulators.firestore). This setting
+  # wires the **daemon side only**: it writes `FIRESTORE_EMULATOR_HOST`
+  # on the daemon process so the firebase-admin SDK auto-routes.
+  #
+  # The Vercel UI is a Next.js browser bundle and cannot read this
+  # config file or non-`NEXT_PUBLIC_*` env vars. For UI dev against the
+  # same emulator, also set `NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST` in the
+  # UI's `.env.local` (see docs/local-development.md).
   emulator:
     firestoreHost: localhost:8080
 

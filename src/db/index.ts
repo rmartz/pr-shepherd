@@ -33,10 +33,15 @@ export type DbAdapterKind =
 
 // Optional emulator configuration. Only consulted when
 // `adapter == "firebase-emulator"`. `firestoreHost` may be a `host:port`
-// string (e.g. `127.0.0.1:8080`); the daemon translates it to
-// `FIRESTORE_EMULATOR_HOST` for the admin SDK and to a
-// `connectFirestoreEmulator(client, host, port)` call for the UI client
-// SDK (see `src/lib/firebase/client.ts`).
+// string (e.g. `127.0.0.1:8080`). This wires the daemon's
+// firebase-admin SDK only — it sets `FIRESTORE_EMULATOR_HOST` on the
+// daemon process, which the admin SDK reads natively.
+//
+// The Vercel-hosted UI is a Next.js browser bundle and cannot read
+// non-`NEXT_PUBLIC_*` env vars at runtime, so the daemon's env-var
+// write does NOT reach the UI. For UI dev against the same emulator,
+// set `NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST=localhost:8080` in the UI's
+// `.env.local`. See `docs/local-development.md` for the full setup.
 export interface EmulatorConfig {
   firestoreHost?: string;
 }
@@ -48,25 +53,38 @@ export interface DbConfig {
 
 const DEFAULT_EMULATOR_FIRESTORE_HOST = "localhost:8080";
 
+// Helper to keep adapter selection deterministic across repeated
+// `createDb` calls in the same process: when the requested adapter is
+// not the emulator, an `FIRESTORE_EMULATOR_HOST` left over from an
+// earlier emulator construction (or set by an outer environment) would
+// silently re-route the admin SDK. Clear it explicitly.
+function clearEmulatorEnv(): void {
+  delete process.env["FIRESTORE_EMULATOR_HOST"];
+}
+
 export function createDb(config: DbConfig): Db {
   switch (config.adapter) {
     case "firebase-hosted":
+      clearEmulatorEnv();
       return createHostedFirestoreDb();
     case "in-memory":
+      clearEmulatorEnv();
       return createInMemoryDb();
     case "firebase-emulator": {
       // The Firebase admin SDK reads `FIRESTORE_EMULATOR_HOST` natively
       // and routes every collection/doc call to the emulator when set.
-      // The client SDK (see `getClientFirestore`) checks the same env
-      // var on first call and invokes `connectFirestoreEmulator` —
-      // setting the variable here is what makes the otherwise-identical
-      // hosted adapter point at the local emulator.
+      // Setting the variable here is what makes the otherwise-identical
+      // hosted adapter point at the local emulator from the daemon
+      // side. The UI side is configured separately via
+      // `NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST` (see `EmulatorConfig`
+      // doc-comment).
       const host =
         config.emulator?.firestoreHost ?? DEFAULT_EMULATOR_FIRESTORE_HOST;
       process.env["FIRESTORE_EMULATOR_HOST"] = host;
       return createHostedFirestoreDb();
     }
     case "leveldb":
+      clearEmulatorEnv();
       throw new Error(
         `Adapter "leveldb" is out of scope for v1 — see Epic 2 stretch goal.`,
       );
