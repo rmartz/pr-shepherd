@@ -18,8 +18,9 @@ import {
 // Scheduler loop (vision §4.2).
 //
 // `runSchedulerTick` is a single-pass unit that:
-//   1. Reads `pending` step instances and `running` step instances from Db.
-//   2. Derives `ActiveCounts` from the running set — this is the source of
+//   1. Reads `pending` step instances and active (`running` + `waiting`) step
+//      instances from Db.
+//   2. Derives `ActiveCounts` from that active set — this is the source of
 //      truth, not a long-lived in-process map. Doing the count fresh each
 //      tick is what makes the scheduler restart-safe: a daemon crash
 //      mid-tick leaves no stale counter state to recover. (Vision §4.2
@@ -66,13 +67,17 @@ export async function runSchedulerTick(
     return { admitted: [], rejected: [], pendingCount: 0 };
   }
 
-  // Fetch running steps and workflow runs to derive ActiveCounts and to
+  // Fetch active steps (running + waiting) and workflow runs to derive
+  // ActiveCounts and to
   // resolve each step's owning repo. We only fetch runs referenced by
-  // pending/running steps, but the simplest correct version is to read
+  // pending/active steps, but the simplest correct version is to read
   // all runs once and index by id — these collections are small relative
   // to step volume and the per-tick cost is bounded.
   const running = await db.list(Collections.stepInstances, {
     status: StepStatus.Running,
+  });
+  const waiting = await db.list(Collections.stepInstances, {
+    status: StepStatus.Waiting,
   });
   const runs = await db.list(Collections.workflowRuns);
   const runById = new Map<string, WorkflowRun>();
@@ -80,7 +85,7 @@ export async function runSchedulerTick(
     runById.set(run.id, run);
   }
 
-  const counts = deriveActiveCounts(running, runById);
+  const counts = deriveActiveCounts([...running, ...waiting], runById);
 
   // FIFO across iterations: sort by createdAt ASC. Ties broken by id so
   // the order is deterministic when timestamps collide.
