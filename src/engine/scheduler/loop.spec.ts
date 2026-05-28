@@ -351,6 +351,32 @@ describe("Rejection reasons are captured in the tick report", () => {
   });
 });
 
+describe("runSchedulerTick only fetches workflow runs referenced by in-flight steps", () => {
+  it("does not read runs that are not parents of any pending/running/waiting step", async () => {
+    const db = createInMemoryDb();
+    // The relevant run (parent of the pending step) and one unrelated
+    // run that should never be read by the tick. We instrument `db.get`
+    // to confirm the narrowing.
+    const relevantRun = await seedRun(db, { id: "relevant" });
+    await seedRun(db, { id: "unrelated" });
+    await seedPendingStep(db, {
+      id: "step-1",
+      runId: relevantRun.id,
+      createdAt: 1000,
+    });
+    const fetchedIds: string[] = [];
+    const originalGet = db.get.bind(db);
+    db.get = async (coll, id) => {
+      if (coll.name === Collections.workflowRuns.name) {
+        fetchedIds.push(id);
+      }
+      return originalGet(coll, id);
+    };
+    await runSchedulerTick(db, makeConfig());
+    expect(fetchedIds).toEqual(["relevant"]);
+  });
+});
+
 describe("startScheduler runs ticks on the configured cadence and stops cleanly", () => {
   it("invokes runSchedulerTick at the configured interval and stops when requested", async () => {
     const db = createInMemoryDb();
