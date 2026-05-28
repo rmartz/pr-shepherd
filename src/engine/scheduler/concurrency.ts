@@ -75,7 +75,11 @@ export type AdmissionDecision =
 // Does the given step type count against the per-repo concurrency cap?
 // See vision §4.3 — `claude_skill`, `github_api`, and `wait_external` all
 // count against the repo dimension; `decision` and `fork` do not.
-function countsAgainstRepo(stepType: StepType): boolean {
+//
+// Exported so the scheduler loop (#55) can apply the same cost matrix
+// when deriving `ActiveCounts` and when incrementally updating counts
+// after admission decisions within a single tick.
+export function countsAgainstRepo(stepType: StepType): boolean {
   switch (stepType) {
     case StepType.ClaudeSkill:
     case StepType.GithubApi:
