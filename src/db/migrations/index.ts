@@ -112,7 +112,18 @@ export async function runMigrations(
     const pending = sorted.filter((m) => m.version > currentVersion);
     applied[collectionName] = [];
     for (const migration of pending) {
-      await migration.up(db);
+      try {
+        await migration.up(db);
+      } catch (cause) {
+        // Wrap with collection + version context so startup logs make
+        // it obvious which migration failed without cross-referencing
+        // line numbers. Preserve the original error via `cause` so the
+        // stack trace and any structured fields remain available.
+        throw new Error(
+          `Migration failed for collection "${collectionName}" at version ${String(migration.version)}: ${cause instanceof Error ? cause.message : String(cause)}`,
+          { cause },
+        );
+      }
       await stampVersion(db, collectionName, migration.version);
       applied[collectionName].push(migration.version);
     }

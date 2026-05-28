@@ -165,6 +165,24 @@ describe("runMigrations aborts on failure without bumping the version", () => {
     const meta = await db.get(Collections.meta, Collections.workflowRuns.name);
     expect(meta).toBeUndefined();
   });
+
+  it("wraps the failing migration's error with collection name and version context", async () => {
+    const db = createInMemoryDb();
+    try {
+      await runMigrations(db, {
+        [Collections.workflowRuns.name]: [throwingMigration(7, "boom")],
+      });
+      throw new Error("expected runMigrations to throw");
+    } catch (err) {
+      expect(err).toBeInstanceOf(Error);
+      const wrapped = err as Error & { cause?: unknown };
+      expect(wrapped.message).toContain("workflowRuns");
+      expect(wrapped.message).toContain("7");
+      expect(wrapped.message).toContain("boom");
+      expect(wrapped.cause).toBeInstanceOf(Error);
+      expect((wrapped.cause as Error).message).toBe("boom");
+    }
+  });
 });
 
 describe("runMigrations rejects malformed migration sets", () => {
