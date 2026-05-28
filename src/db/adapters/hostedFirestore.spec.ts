@@ -571,3 +571,52 @@ describe("createDb factory wires firebase-hosted to the new adapter", () => {
     }
   });
 });
+
+// ---------------------------------------------------------------------------
+// Capability split: admin SDK is loaded lazily and the client subscribe
+// surface refuses collections that firestore.rules does not expose.
+// ---------------------------------------------------------------------------
+describe("Admin SDK initialization is deferred to first admin method call", () => {
+  it("does not touch the admin handle when only subscribe() is called", () => {
+    const { store } = makeFakeAdmin();
+    const client = makeFakeClient(store);
+    // Pass no adminFirestore — if the constructor touched the default loader
+    // it would try to `await import("../../lib/firebase/admin")` and
+    // initialize firebase-admin, which would fail with no credentials in
+    // this environment. The fact that this constructor + subscribe call
+    // completes synchronously without error proves the admin path was
+    // never hit.
+    const db = createHostedFirestoreDb({
+      clientFirestoreModule: client,
+    });
+    const unsubscribe = db.subscribe(
+      Collections.repositories,
+      undefined,
+      () => undefined,
+    );
+    expect(typeof unsubscribe).toBe("function");
+    unsubscribe();
+  });
+});
+
+describe("subscribe() rejects collections not exposed by firestore.rules", () => {
+  it("throws a clear error rather than waiting for a permission-denied snapshot", () => {
+    const { store } = makeFakeAdmin();
+    const client = makeFakeClient(store);
+    const db = createHostedFirestoreDb({
+      clientFirestoreModule: client,
+    });
+    // Construct a fake collection definition with a name that's not in the
+    // subscribable allowlist; the four real collections (repositories,
+    // workflowRuns, stepInstances, workflowDefinitions) are all subscribable
+    // per firestore.rules, so we use a synthetic name to test the guard.
+    const fakeColl = {
+      name: "secrets",
+      schema: Collections.repositories.schema,
+      idField: "id" as const,
+    };
+    expect(() => db.subscribe(fakeColl, undefined, () => undefined)).toThrow(
+      /not subscribable/,
+    );
+  });
+});

@@ -46,8 +46,13 @@ function makeRepo(overrides: Partial<Repository> = {}): Repository {
 }
 
 describe("HostedFirestoreDb integration with the Firebase Emulator", () => {
-  it("write-then-subscribe round-trip including unsubscribe", async () => {
-    if (!(await emulatorReachable())) return;
+  it("write-then-subscribe round-trip including unsubscribe", async (ctx) => {
+    if (!(await emulatorReachable())) {
+      // Report as skipped (not passed) so test reporters can distinguish
+      // "emulator coverage actually ran" from "happens to be unreachable".
+      ctx.skip();
+      return;
+    }
     // Point the admin SDK at the emulator. Setting both env vars is what the
     // SDK reads on initialization, so we set them before importing the
     // Firebase modules below.
@@ -99,9 +104,12 @@ describe("HostedFirestoreDb integration with the Firebase Emulator", () => {
     const repo = makeRepo();
     const onChange = vi.fn();
 
+    // Subscribe with an exact-id filter so we only observe this test's
+    // writes — protects against emulator state contamination from other
+    // tests or prior runs.
     const unsubscribe = db.subscribe(
       Collections.repositories,
-      undefined,
+      { id: repo.id },
       onChange,
     );
 
@@ -109,20 +117,20 @@ describe("HostedFirestoreDb integration with the Firebase Emulator", () => {
       await db.create(Collections.repositories, repo);
 
       // Wait for the snapshot to arrive — onSnapshot is push-based but the
-      // emulator round-trip has a small delay.
+      // emulator round-trip has a small delay. Assert the snapshot CONTAINS
+      // this test's repo rather than is-at-index-0, since order across
+      // filter passes is not guaranteed.
       await vi.waitFor(
         () => {
-          const last = onChange.mock.calls.at(-1);
-          expect(last?.[0]?.length).toBeGreaterThanOrEqual(1);
+          const last = onChange.mock.calls.at(-1) as [Repository[]] | undefined;
+          expect(last?.[0]?.some((d) => d.id === repo.id)).toBe(true);
         },
         { timeout: 5000, interval: 100 },
       );
 
-      const last = onChange.mock.calls.at(-1);
-      expect(last?.[0]?.[0]?.id).toBe(repo.id);
-
-      // Verify the unsubscribe path: after unsubscribing, even writes that
-      // would otherwise match must not trigger our callback.
+      // Verify the unsubscribe path: after unsubscribing, an update to the
+      // very document the subscription was filtering on must not trigger
+      // our callback.
       unsubscribe();
       onChange.mockClear();
       await db.update(Collections.repositories, repo.id, {
