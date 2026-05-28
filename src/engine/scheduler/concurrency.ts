@@ -84,6 +84,18 @@ function countsAgainstRepo(stepType: StepType): boolean {
     case StepType.Decision:
     case StepType.Fork:
       return false;
+    default: {
+      // Exhaustiveness guard: a new `StepType` value must add an
+      // explicit case above. Without this, an unknown value (e.g. an
+      // older DB row deserialized without strict schema validation)
+      // would fall through and silently return `undefined`, which the
+      // caller's `if (!countsAgainstRepo(...))` would treat as
+      // zero-cost — a silent bypass of every concurrency cap.
+      const _exhaustive: never = stepType;
+      throw new Error(
+        `Unknown step type for concurrency check: ${String(_exhaustive)}`,
+      );
+    }
   }
 }
 
@@ -97,6 +109,17 @@ export function canAdmitStep(
   // executed in-process and consume no global or per-repo slots.
   if (!countsAgainstRepo(candidate.stepType)) {
     return { admit: true };
+  }
+
+  // Defensive check: when a per-repo override is supplied, its `id` must
+  // match the candidate's repo. A mismatch is always a caller bug (e.g.
+  // fetching the wrong index from `repositories[]` in config.yaml) and
+  // would silently apply the wrong repo's cap. Fail loudly here rather
+  // than letting the mismatch leak into the scheduler's decision.
+  if (repoConfig !== undefined && repoConfig.id !== candidate.repoId) {
+    throw new Error(
+      `RepoConfig id "${repoConfig.id}" does not match candidate repo "${candidate.repoId}".`,
+    );
   }
 
   const repoMax = repoConfig?.concurrencyMax ?? config.defaultRepoMax;

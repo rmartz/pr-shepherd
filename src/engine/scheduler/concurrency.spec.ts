@@ -241,6 +241,47 @@ describe("Cost-free step types are admitted regardless of any capacity", () => {
   });
 });
 
+describe("Defensive guards", () => {
+  it("throws when an unknown StepType bypasses the type system", () => {
+    // Simulate an unknown enum value reaching the function via type
+    // assertion (or e.g. a DB row from a future schema version
+    // deserialized without strict validation). The exhaustiveness
+    // guard must throw rather than silently treating the step as
+    // zero-cost.
+    const candidate = {
+      stepType: "telepathy" as StepType,
+      repoId: "owner/repo-a",
+    };
+    expect(() =>
+      canAdmitStep(candidate, makeCounts(), makeConfig(), makeRepoConfig()),
+    ).toThrow(/Unknown step type/);
+  });
+
+  it("throws when RepoConfig.id does not match the candidate's repo", () => {
+    // Always a caller bug — would silently apply the wrong repo's cap.
+    expect(() =>
+      canAdmitStep(
+        makeCandidate(StepType.GithubApi, "owner/repo-a"),
+        makeCounts(),
+        makeConfig(),
+        makeRepoConfig({ id: "owner/repo-b" }),
+      ),
+    ).toThrow(/does not match candidate repo/);
+  });
+
+  it("does not validate RepoConfig when none is supplied (defaultRepoMax path)", () => {
+    // No RepoConfig → no validation; behavior falls back to
+    // defaultRepoMax as documented.
+    const decision = canAdmitStep(
+      makeCandidate(StepType.GithubApi, "owner/repo-d"),
+      makeCounts(),
+      makeConfig({ defaultRepoMax: 2 }),
+      // repoConfig omitted
+    );
+    expect(decision.admit).toBe(true);
+  });
+});
+
 describe("wait_external steps count against the repo only", () => {
   it("admits a wait_external step when the repo has capacity", () => {
     const decision = canAdmitStep(
