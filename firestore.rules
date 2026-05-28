@@ -5,7 +5,7 @@ rules_version = '2';
 // PR Shepherd writes all daemon state via the firebase-admin SDK, which
 // bypasses these rules entirely. Client SDK access (the read-only Next.js UI
 // for monitoring run state) is constrained here: authenticated reads on the
-// three daemon collections, no client writes ever.
+// four daemon collections, no client writes ever.
 //
 // - Daemon writes:     admin SDK (rules do not apply)
 // - UI reads:          require auth + email allowlist (see isAllowedOperator)
@@ -54,6 +54,14 @@ service cloud.firestore {
     }
 
     match /stepInstances/{stepId} {
+      allow read: if isAllowedOperator();
+      allow write: if false;
+    }
+
+    // Reference copy of the workflow YAML in effect when each run started.
+    // Read-only for the UI (audit timeline); written exclusively by the
+    // admin SDK on the daemon side.
+    match /workflowDefinitions/{defId} {
       allow read: if isAllowedOperator();
       allow write: if false;
     }

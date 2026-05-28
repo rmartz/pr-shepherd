@@ -16,6 +16,7 @@ export type {
 export { Collections } from "./collections";
 export * from "./schemas";
 
+import { createHostedFirestoreDb } from "./adapters/hostedFirestore";
 import { createInMemoryDb } from "./adapters/inMemory";
 import type { Db } from "./types";
 
@@ -36,12 +37,13 @@ export interface DbConfig {
 
 export function createDb(config: DbConfig): Db {
   switch (config.adapter) {
+    case "firebase-hosted":
+      return createHostedFirestoreDb();
     case "in-memory":
       return createInMemoryDb();
-    case "firebase-hosted":
     case "firebase-emulator":
       throw new Error(
-        `Adapter "${config.adapter}" not yet implemented — see issue #38 (hosted) / #39 (emulator).`,
+        `Adapter "firebase-emulator" not yet implemented — see issue #39.`,
       );
     case "leveldb":
       throw new Error(
