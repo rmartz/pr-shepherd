@@ -32,6 +32,20 @@ describe("MetaDocSchema round-trip and rejection", () => {
       MetaDocSchema.parse({ ...valid, schemaVersion: -1 }),
     ).toThrow();
   });
+
+  it("rejects a meta document with schemaVersion 0 to match the runner invariant", () => {
+    // The migrations runner never stamps 0 (validateMigrations rejects
+    // versions < 1) and treats absence of a meta doc as "nothing applied
+    // yet". Allowing 0 here would let a rogue write create a doc that
+    // readCurrentVersion would treat identically to "no doc", causing
+    // the runner to re-apply every migration.
+    expect(() => MetaDocSchema.parse({ ...valid, schemaVersion: 0 })).toThrow();
+  });
+
+  it("accepts a meta document with schemaVersion 1 (the minimum valid)", () => {
+    const parsed = MetaDocSchema.parse({ ...valid, schemaVersion: 1 });
+    expect(parsed.schemaVersion).toBe(1);
+  });
 });
 
 describe("RepositorySchema round-trip and rejection", () => {
