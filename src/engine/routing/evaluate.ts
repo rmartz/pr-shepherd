@@ -42,12 +42,29 @@ export interface RoutingEnv {
   context: Record<string, unknown>;
 }
 
+// Module-level cache of parsed ASTs keyed by the raw condition source.
+// Routing rules are immutable once authored and routing strings come from
+// the same handful of workflow definitions per daemon, so the cache stays
+// bounded in practice. The cache means each unique condition is tokenized
+// and parsed exactly once across the daemon's lifetime — `evaluateRouting`
+// reduces to a tree walk on every subsequent tick. The workflow loader's
+// own pre-validation pass primes this cache as a side effect.
+const astCache = new Map<string, ConditionAst>();
+
+function getCachedAst(condition: string): ConditionAst {
+  const hit = astCache.get(condition);
+  if (hit !== undefined) return hit;
+  const ast = parseCondition(condition);
+  astCache.set(condition, ast);
+  return ast;
+}
+
 export function evaluateRouting(
   rules: RoutingRule[],
   env: RoutingEnv,
 ): string | null {
   for (const rule of rules) {
-    const ast = parseCondition(rule.condition);
+    const ast = getCachedAst(rule.condition);
     if (toBool(evalAst(ast, env))) {
       return rule.next;
     }

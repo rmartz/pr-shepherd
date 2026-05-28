@@ -131,8 +131,23 @@ function tokenize(source: string): Token[] {
       continue;
     }
     if (ch !== undefined && /[0-9]/.test(ch)) {
-      while (i < source.length && /[0-9.]/.test(source[i] ?? "")) i += 1;
+      while (i < source.length && /[0-9]/.test(source[i] ?? "")) i += 1;
+      if (source[i] === "." && /[0-9]/.test(source[i + 1] ?? "")) {
+        i += 1;
+        while (i < source.length && /[0-9]/.test(source[i] ?? "")) i += 1;
+      }
       const value = source.slice(start, i);
+      // Reject malformed literals like `1.2.3` — the next character must
+      // not extend a second fractional part. Without this guard, the
+      // tokenizer would greedily slurp the trailing `.3` into the
+      // identifier path and Number("1.2.3") would silently become NaN,
+      // which compares unequal to every concrete value and quietly
+      // masks the parse error at evaluation time.
+      if (source[i] === "." && /[0-9]/.test(source[i + 1] ?? "")) {
+        throw new Error(
+          `Malformed numeric literal "${value}." at position ${String(start)} — at most one decimal point is allowed.`,
+        );
+      }
       tokens.push({ kind: "num", value, pos: start });
       continue;
     }

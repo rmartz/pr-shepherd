@@ -1,10 +1,11 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import {
   evaluateRouting,
   parseCondition,
   type RoutingEnv,
   type RoutingRule,
 } from "./evaluate";
+import * as parser from "./parser";
 
 // ---------------------------------------------------------------------------
 // Tests for the routing DSL evaluator (vision §4.4). After a step completes
@@ -47,6 +48,16 @@ describe("parseCondition surfaces syntax errors", () => {
 
   it("rejects an unexpected token", () => {
     expect(() => parseCondition("output.x ==")).toThrow();
+  });
+
+  it("rejects a malformed numeric literal with more than one decimal point", () => {
+    // Without an explicit shape check the tokenizer would slurp `1.2.3`
+    // into a single num token; Number("1.2.3") is NaN, which silently
+    // compares unequal to every concrete value at runtime. We want this
+    // surfaced at parse time alongside other syntax errors.
+    expect(() => parseCondition("output.x == 1.2.3")).toThrow(
+      /malformed numeric literal/i,
+    );
   });
 });
 
@@ -187,6 +198,30 @@ describe("Evaluator throws when no rule matches (no catch-all)", () => {
     expect(() => evaluateRouting(rules, env({ verdict: "blocked" }))).toThrow(
       /no routing rule matched/i,
     );
+  });
+});
+
+// --- AST caching: parseCondition is memoized ------------------------------
+describe("evaluateRouting memoizes parsed conditions across evaluations", () => {
+  it("parses each unique condition string exactly once across repeated evaluations", () => {
+    const spy = vi.spyOn(parser, "parseCondition");
+    // Use unique conditions per test run so we can attribute spy calls
+    // to this evaluation independently of other tests that share the
+    // module-level cache.
+    const uniqueCond = `output.verdict == 'cache-test-${Math.random()}'`;
+    const rules: RoutingRule[] = [
+      { condition: uniqueCond, next: "next-step" },
+      { condition: "true", next: null },
+    ];
+    const e = env({ verdict: "anything-else" });
+    evaluateRouting(rules, e);
+    const callsAfterFirst = spy.mock.calls.length;
+    evaluateRouting(rules, e);
+    evaluateRouting(rules, e);
+    // After the first call primed the cache, subsequent evaluations
+    // must not re-invoke parseCondition for the same source strings.
+    expect(spy.mock.calls.length).toBe(callsAfterFirst);
+    spy.mockRestore();
   });
 });
 
