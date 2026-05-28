@@ -1,4 +1,4 @@
-import { describe, it, expect } from "vitest";
+import { describe, it, expect, vi } from "vitest";
 import { createInMemoryDb } from "@/db/adapters/inMemory";
 import { Collections } from "@/db/collections";
 import {
@@ -87,6 +87,9 @@ async function seedQueuedStep(
     runId: string;
     stepType?: StepType;
     input?: Record<string, unknown>;
+    metrics?: StepInstance["metrics"];
+    createdAt?: number;
+    queuedAt?: number;
   },
 ): Promise<StepInstance> {
   const step: StepInstance = {
@@ -95,8 +98,9 @@ async function seedQueuedStep(
     runId: args.runId,
     stepType: args.stepType ?? StepType.ClaudeSkill,
     input: args.input ?? {},
-    createdAt: 1000,
-    queuedAt: 1500,
+    metrics: args.metrics ?? makeBaseStepInstance().metrics,
+    createdAt: args.createdAt ?? 1000,
+    queuedAt: args.queuedAt ?? 1500,
   };
   await db.create(Collections.stepInstances, step);
   return step;
@@ -162,6 +166,37 @@ describe("Runner merges executor output into the parent workflowRun.context on s
       newKey: "added",
     });
   });
+
+  it("applies completion metrics once to both the step and the parent run", async () => {
+    const db = createInMemoryDb();
+    const run = await seedRun(db);
+    await seedQueuedStep(db, { id: "step-1", runId: run.id, queuedAt: 1600 });
+    const runner = createRunner(db, {
+      [StepType.ClaudeSkill]: () => Promise.resolve({ output: { ok: true } }),
+    });
+    const step = await db.get(Collections.stepInstances, "step-1");
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy.mockReturnValueOnce(2000).mockReturnValueOnce(2600);
+    try {
+      await runner.dispatch(step!);
+    } finally {
+      nowSpy.mockRestore();
+    }
+    const updatedStep = await db.get(Collections.stepInstances, "step-1");
+    const updatedRun = await db.get(Collections.workflowRuns, run.id);
+    expect(updatedStep?.metrics).toEqual({
+      claudeMs: 600,
+      activeMs: 0,
+      scheduleWaitMs: 600,
+      externalWaitMs: 0,
+    });
+    expect(updatedRun?.metrics).toEqual({
+      totalClaudeMs: 600,
+      totalActiveMs: 0,
+      totalScheduleWaitMs: 600,
+      totalExternalWaitMs: 0,
+    });
+  });
 });
 
 describe("Runner transitions to failed when the executor throws", () => {
@@ -178,6 +213,93 @@ describe("Runner transitions to failed when the executor throws", () => {
     expect(final?.status).toBe(StepStatus.Failed);
     expect(final?.error).toContain("boom from executor");
     expect(final?.retryCount).toBe(1);
+  });
+
+  it("applies failure metrics once to both the step and the parent run", async () => {
+    const db = createInMemoryDb();
+    const run = await seedRun(db);
+    await seedQueuedStep(db, {
+      id: "step-1",
+      runId: run.id,
+      stepType: StepType.GithubApi,
+      createdAt: 1000,
+      queuedAt: 1200,
+    });
+    const runner = createRunner(db, {
+      [StepType.GithubApi]: () => Promise.reject(new Error("boom")),
+    });
+    const step = await db.get(Collections.stepInstances, "step-1");
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy.mockReturnValueOnce(1500).mockReturnValueOnce(1800);
+    try {
+      await runner.dispatch(step!);
+    } finally {
+      nowSpy.mockRestore();
+    }
+    const updatedStep = await db.get(Collections.stepInstances, "step-1");
+    const updatedRun = await db.get(Collections.workflowRuns, run.id);
+    expect(updatedStep?.metrics).toEqual({
+      claudeMs: 0,
+      activeMs: 300,
+      scheduleWaitMs: 200,
+      externalWaitMs: 0,
+    });
+    expect(updatedRun?.metrics).toEqual({
+      totalClaudeMs: 0,
+      totalActiveMs: 300,
+      totalScheduleWaitMs: 200,
+      totalExternalWaitMs: 0,
+    });
+  });
+
+  it("does not double-count carried metrics on a heartbeat replacement step", async () => {
+    const db = createInMemoryDb();
+    const run = await seedRun(db, {
+      metrics: {
+        totalClaudeMs: 500,
+        totalActiveMs: 0,
+        totalScheduleWaitMs: 100,
+        totalExternalWaitMs: 0,
+      },
+    });
+    await seedQueuedStep(db, {
+      id: "step-retry-1",
+      runId: run.id,
+      stepType: StepType.ClaudeSkill,
+      createdAt: 2000,
+      queuedAt: 2200,
+      metrics: {
+        claudeMs: 500,
+        activeMs: 0,
+        scheduleWaitMs: 100,
+        externalWaitMs: 0,
+      },
+    });
+    const runner = createRunner(db, {
+      [StepType.ClaudeSkill]: () => Promise.resolve({ output: {} }),
+    });
+    const step = await db.get(Collections.stepInstances, "step-retry-1");
+    const nowSpy = vi.spyOn(Date, "now");
+    nowSpy.mockReturnValueOnce(2300).mockReturnValueOnce(2600);
+    try {
+      await runner.dispatch(step!);
+    } finally {
+      nowSpy.mockRestore();
+    }
+    const updatedStep = await db.get(Collections.stepInstances, "step-retry-1");
+    const updatedRun = await db.get(Collections.workflowRuns, run.id);
+    expect(updatedStep?.metrics).toEqual({
+      claudeMs: 800,
+      activeMs: 0,
+      scheduleWaitMs: 300,
+      externalWaitMs: 0,
+    });
+    expect(updatedRun?.metrics).toEqual({
+      totalClaudeMs: 800,
+      totalActiveMs: 0,
+      totalScheduleWaitMs: 300,
+      totalExternalWaitMs: 0,
+    });
   });
 });
 
