@@ -299,6 +299,35 @@ describe("wait_external steps count against the repo only", () => {
     expect(decision.admit).toBe(true);
   });
 
+  describe("wait_author_push steps count against the repo only", () => {
+    it("admits a wait_author_push step when the repo has capacity", () => {
+      const decision = canAdmitStep(
+        makeCandidate(StepType.WaitAuthorPush),
+        makeCounts({
+          systemClaude: 8,
+          systemGithubApi: 4,
+          perRepo: new Map([["owner/repo-a", 1]]),
+        }),
+        makeConfig({ systemMax: 8, githubApiMax: 4 }),
+        makeRepoConfig({ concurrencyMax: 2 }),
+      );
+      expect(decision.admit).toBe(true);
+    });
+
+    it("rejects a wait_author_push step when the repo is at its cap", () => {
+      const decision = canAdmitStep(
+        makeCandidate(StepType.WaitAuthorPush),
+        makeCounts({ perRepo: new Map([["owner/repo-a", 2]]) }),
+        makeConfig(),
+        makeRepoConfig({ concurrencyMax: 2 }),
+      );
+      expect(decision.admit).toBe(false);
+      if (!decision.admit) {
+        expect(decision.reason).toBe(AdmissionRejectReason.RepoFull);
+      }
+    });
+  });
+
   it("rejects a wait_external step when the repo is at its cap", () => {
     const decision = canAdmitStep(
       makeCandidate(StepType.WaitExternal),
