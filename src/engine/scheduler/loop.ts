@@ -67,23 +67,31 @@ export async function runSchedulerTick(
     return { admitted: [], rejected: [], pendingCount: 0 };
   }
 
-  // Fetch active steps (running + waiting) and workflow runs to derive
-  // ActiveCounts and to
-  // resolve each step's owning repo. We only fetch runs referenced by
-  // pending/active steps, but the simplest correct version is to read
-  // all runs once and index by id — these collections are small relative
-  // to step volume and the per-tick cost is bounded.
+  // Fetch active steps (running + waiting). The per-repo cost matrix
+  // counts both, and ActiveCounts is derived below from the union.
   const running = await db.list(Collections.stepInstances, {
     status: StepStatus.Running,
   });
   const waiting = await db.list(Collections.stepInstances, {
     status: StepStatus.Waiting,
   });
-  const runs = await db.list(Collections.workflowRuns);
+  // Fetch only the workflow runs referenced by the steps we just read.
+  // The runs collection grows linearly with PR throughput, so a blanket
+  // `db.list(workflowRuns)` would dominate per-tick latency once the
+  // daemon has been driving PRs for a while. Bounding the fetch to the
+  // distinct `runId`s on the active step set keeps the per-tick cost
+  // proportional to in-flight work rather than total history.
+  const referencedRunIds = new Set<string>();
+  for (const step of pending) referencedRunIds.add(step.runId);
+  for (const step of running) referencedRunIds.add(step.runId);
+  for (const step of waiting) referencedRunIds.add(step.runId);
   const runById = new Map<string, WorkflowRun>();
-  for (const run of runs) {
-    runById.set(run.id, run);
-  }
+  await Promise.all(
+    [...referencedRunIds].map(async (id) => {
+      const run = await db.get(Collections.workflowRuns, id);
+      if (run !== undefined) runById.set(id, run);
+    }),
+  );
 
   const counts = deriveActiveCounts([...running, ...waiting], runById);
 
