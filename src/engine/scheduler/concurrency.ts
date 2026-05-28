@@ -17,7 +17,7 @@ import { StepType } from "@/db/schemas";
 //                                  rate-limit storms across all repos).
 //   - repo.concurrencyMax        — per-repo cap on active steps that count
 //                                  against the repo (claude_skill, github_api,
-//                                  wait_external).
+//                                  wait_author_push, wait_external).
 //
 // Cost-free step types (`decision`, `fork`) are admitted unconditionally —
 // they execute in-process and consume no external resources.
@@ -38,7 +38,8 @@ export interface ConcurrencyConfig {
   githubApiMax: number;
   // Default per-repo cap when a repository does not declare its own
   // `concurrencyMax`. Applies to any step type that counts against the
-  // repo dimension (`claude_skill`, `github_api`, `wait_external`).
+  // repo dimension (`claude_skill`, `github_api`, `wait_author_push`,
+  // `wait_external`).
   defaultRepoMax: number;
 }
 
@@ -73,8 +74,9 @@ export type AdmissionDecision =
   | { admit: false; reason: AdmissionRejectReason };
 
 // Does the given step type count against the per-repo concurrency cap?
-// See vision §4.3 — `claude_skill`, `github_api`, and `wait_external` all
-// count against the repo dimension; `decision` and `fork` do not.
+// See vision §4.3 — `claude_skill`, `github_api`, `wait_author_push`, and
+// `wait_external` all count against the repo dimension; `decision` and `fork`
+// do not.
 //
 // Exported so the scheduler loop (#55) can apply the same cost matrix
 // when deriving `ActiveCounts` and when incrementally updating counts
@@ -83,6 +85,7 @@ export function countsAgainstRepo(stepType: StepType): boolean {
   switch (stepType) {
     case StepType.ClaudeSkill:
     case StepType.GithubApi:
+    case StepType.WaitAuthorPush:
     case StepType.WaitExternal:
       return true;
     case StepType.Decision:
@@ -149,6 +152,7 @@ export function canAdmitStep(
       }
       break;
     case StepType.WaitExternal:
+    case StepType.WaitAuthorPush:
       // No global cap — repo cap is the only constraint.
       break;
     case StepType.Decision:
