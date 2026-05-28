@@ -153,7 +153,7 @@ describe("forkExecutor seeds the child's first stepInstance via the injected fac
   });
 });
 
-describe("forkExecutor inherits the parent's repo when the input omits it", () => {
+describe("forkExecutor inherits the parent run's repo onto the child run", () => {
   it("copies parent.repo onto the child run", async () => {
     const db = createInMemoryDb();
     await db.create(
@@ -242,5 +242,59 @@ describe("forkExecutor initialContext from input populates child context", () =>
     );
     const childRun = await db.get(Collections.workflowRuns, "gen-0");
     expect(childRun?.context).toEqual({ seeded: "yes", count: 3 });
+  });
+});
+
+describe("createForkExecutor rejects a non-positive-integer maxDepth", () => {
+  it("throws at construction time when maxDepth is 0", () => {
+    const db = createInMemoryDb();
+    expect(() =>
+      createForkExecutor(db, {
+        firstStepFactory: makeFirstStepFactory(),
+        maxDepth: 0,
+      }),
+    ).toThrow(/positive integer/i);
+  });
+});
+
+describe("forkExecutor throws when the chain contains a cycle", () => {
+  it("rejects a parentRunId pointer that creates a loop", async () => {
+    const db = createInMemoryDb();
+    // run-a → run-b → run-a (cycle)
+    await db.create(
+      Collections.workflowRuns,
+      makeWorkflowRun({ id: "run-a", parentRunId: "run-b" }),
+    );
+    await db.create(
+      Collections.workflowRuns,
+      makeWorkflowRun({ id: "run-b", parentRunId: "run-a" }),
+    );
+    const exec = createForkExecutor(db, {
+      firstStepFactory: makeFirstStepFactory(),
+      newId: () => "ignored",
+    });
+    await expect(exec(makeForkStep({ runId: "run-a" }))).rejects.toThrow(
+      /cycle detected/i,
+    );
+  });
+});
+
+describe("forkExecutor throws when the chain references a missing parent run", () => {
+  it("does not silently truncate the chain on a dangling parentRunId", async () => {
+    const db = createInMemoryDb();
+    // run-leaf points at a parent that doesn't exist — without the
+    // missing-parent guard the chain would silently truncate to length
+    // 1 and the cap could be bypassed.
+    await db.create(
+      Collections.workflowRuns,
+      makeWorkflowRun({ id: "run-leaf", parentRunId: "run-ghost" }),
+    );
+    const exec = createForkExecutor(db, {
+      firstStepFactory: makeFirstStepFactory(),
+      newId: () => "ignored",
+    });
+    await expect(exec(makeForkStep({ runId: "run-leaf" }))).rejects.toThrow(
+      /missing parent run run-ghost/,
+    );
   });
 });

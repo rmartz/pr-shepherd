@@ -22,10 +22,11 @@ import type { ExecutorResult, StepExecutor } from "@/engine/runner";
 //
 // Depth cap (default 5, configurable via `maxDepth`) prevents infinite
 // fork chains caused by a workflow accidentally forking its own
-// descendants. The cap counts the chain length: a fork attempted from a
-// run whose chain (root → … → current) already has `maxDepth` ancestors
-// raises a parse-clear error identifying every link in the chain so an
-// operator can pinpoint the runaway lineage.
+// descendants. The cap is exclusive and applies to the *would-be child*'s
+// depth: `child.depth = chain.length` where `chain` is the run lineage
+// from root to the fork step's current run inclusive. A fork whose child
+// would land at depth `>= maxDepth` raises an error that identifies
+// every link in the chain so an operator can pinpoint the runaway lineage.
 //
 // Zero-cost admission is enforced upstream by `canAdmitStep` (#45): a
 // `Fork` candidate short-circuits every cap.
@@ -66,6 +67,14 @@ export interface ForkOptions {
 
 export function createForkExecutor(db: Db, opts: ForkOptions): StepExecutor {
   const maxDepth = opts.maxDepth ?? DEFAULT_FORK_MAX_DEPTH;
+  // Validate at construction time so configuration mistakes (e.g. `0`
+  // from an unvalidated YAML field) surface eagerly rather than silently
+  // making every fork either always-allow or always-reject.
+  if (!Number.isInteger(maxDepth) || maxDepth < 1) {
+    throw new Error(
+      `fork maxDepth must be a positive integer (>= 1); got ${String(maxDepth)}`,
+    );
+  }
   const newId = opts.newId ?? (() => randomUUID());
   const now = opts.now ?? Date.now;
 
@@ -77,9 +86,9 @@ export function createForkExecutor(db: Db, opts: ForkOptions): StepExecutor {
     const chain = await loadChain(db, step.runId);
     if (chain.length >= maxDepth) {
       throw new Error(
-        `fork depth cap exceeded (${String(chain.length + 1)} levels): current chain is ${chain
+        `fork depth cap exceeded (would-be child depth ${String(chain.length)} meets cap ${String(maxDepth)}): current chain is ${chain
           .map((r) => r.id)
-          .join(" → ")}; configured cap is ${String(maxDepth)}`,
+          .join(" → ")}`,
       );
     }
 
@@ -136,8 +145,14 @@ export function createForkExecutor(db: Db, opts: ForkOptions): StepExecutor {
     };
     await db.create(Collections.stepInstances, firstStep);
 
+    // Re-read the parent immediately before appending so a concurrent
+    // fork (or other writer) is not clobbered by our stale snapshot.
+    // This is a best-effort guard — the proper fix is an atomic
+    // array-union primitive on the Db adapter (tracked in #79).
+    const parentFresh = await db.get(Collections.workflowRuns, parent.id);
+    const currentChildRunIds = parentFresh?.childRunIds ?? parent.childRunIds;
     await db.update(Collections.workflowRuns, parent.id, {
-      childRunIds: [...parent.childRunIds, childRunId],
+      childRunIds: [...currentChildRunIds, childRunId],
       updatedAt: createdAt,
     });
 
@@ -148,15 +163,39 @@ export function createForkExecutor(db: Db, opts: ForkOptions): StepExecutor {
 async function loadChain(db: Db, leafRunId: string): Promise<WorkflowRun[]> {
   // Walk parentRunId pointers from leaf back to root, then reverse so
   // the returned array reads root → ... → leaf (which is the order the
-  // error message wants when the cap is exceeded).
+  // error message wants when the cap is exceeded). A `visited` set
+  // detects cycles introduced by data corruption; a missing parent
+  // pointer throws rather than silently truncating the chain (which
+  // would undercount depth and allow forks to bypass the cap).
   const reverseChain: WorkflowRun[] = [];
+  const visited = new Set<string>();
   let currentId: string | undefined = leafRunId;
   while (currentId !== undefined) {
+    if (visited.has(currentId)) {
+      throw new Error(
+        `fork chain cycle detected at run ${currentId}: visited ids are ${[...visited].join(", ")}`,
+      );
+    }
+    visited.add(currentId);
     const run: WorkflowRun | undefined = await db.get(
       Collections.workflowRuns,
       currentId,
     );
-    if (run === undefined) break;
+    if (run === undefined) {
+      // The very first lookup missing means the fork step references a
+      // run that no longer exists — surface that distinctly. A missing
+      // ancestor mid-walk means data corruption (a parentRunId pointing
+      // at a deleted run), which we also surface so the cap is never
+      // bypassed by a truncated chain.
+      throw new Error(
+        reverseChain.length === 0
+          ? `fork step references runId ${currentId} which does not exist`
+          : `fork chain references missing parent run ${currentId}; chain so far: ${reverseChain
+              .map((r) => r.id)
+              .reverse()
+              .join(" → ")}`,
+      );
+    }
     reverseChain.push(run);
     currentId = run.parentRunId;
   }
