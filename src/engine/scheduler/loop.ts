@@ -150,8 +150,8 @@ function incrementCounts(
 ): void {
   if (!countsAgainstRepo(stepType)) return;
   counts.perRepo.set(repoId, (counts.perRepo.get(repoId) ?? 0) + 1);
-  // Per-step-type global dimensions. WaitExternal counts only against
-  // the repo dimension (no global cap).
+  // Per-step-type global dimensions. WaitExternal/WaitAuthorPush count
+  // only against the repo dimension (no global cap).
   switch (stepType) {
     case StepType.ClaudeSkill:
       counts.systemClaude += 1;
