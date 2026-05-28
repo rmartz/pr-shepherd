@@ -59,7 +59,6 @@ describe("waitAuthorPush executor", () => {
     expect(listCommitDates).toHaveBeenCalledTimes(1);
     expect(listCommitSummaries).toHaveBeenCalledTimes(1);
     expect(sleep).not.toHaveBeenCalled();
-    expect(step.status).toBe(StepStatus.Waiting);
   });
 
   it("detects push during polling on a later iteration", async () => {
@@ -100,7 +99,6 @@ describe("waitAuthorPush executor", () => {
     expect(listCommitDates).toHaveBeenCalledTimes(2);
     expect(sleep).toHaveBeenCalledTimes(1);
     expect(sleep).toHaveBeenCalledWith(1000);
-    expect(step.metrics.externalWaitMs).toBe(1000);
   });
 
   it("returns a completed timeout result when no new commit arrives in time", async () => {
@@ -134,8 +132,6 @@ describe("waitAuthorPush executor", () => {
     expect(listCommitDates).toHaveBeenCalledTimes(4);
     expect(listCommitSummaries).not.toHaveBeenCalled();
     expect(sleep.mock.calls.map((call) => call[0])).toEqual([1000, 1000, 1000]);
-    expect(step.metrics.externalWaitMs).toBe(3000);
-    expect(step.heartbeatAt).toBe(3000);
   });
 
   it("uses default timeout and poll interval values when not provided", async () => {
@@ -171,8 +167,6 @@ describe("waitAuthorPush executor", () => {
     expect(sleep).toHaveBeenCalledWith(
       DEFAULT_WAIT_AUTHOR_PUSH_POLL_INTERVAL_MS,
     );
-    expect(step.waitingAt).toBe(0);
-    expect(step.metrics.externalWaitMs).toBe(0);
   });
 
   it("rejects invalid input schema", async () => {

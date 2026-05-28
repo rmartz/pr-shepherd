@@ -1,6 +1,6 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
-import { StepStatus, type StepInstance } from "@/db/schemas";
+import type { StepInstance } from "@/db/schemas";
 import type { StepExecutor } from "@/engine/runner";
 import { z } from "zod";
 
@@ -94,18 +94,20 @@ export function createWaitAuthorPushExecutor(
     const timeoutAt = startedAt + timeoutMs;
     const sinceMs = Date.parse(input.sinceReviewSubmittedAt);
 
-    // Wait steps switch to waiting immediately and keep heartbeating while they
-    // poll external state.
-    step.status = StepStatus.Waiting;
-    step.waitingAt = step.waitingAt ?? startedAt;
-    step.heartbeatAt = startedAt;
+    // Wait steps conceptually transition `running → waiting` and need to
+    // refresh `heartbeatAt` once per poll so the heartbeat monitor sees
+    // them as live. Under the current `StepExecutor` contract from #56,
+    // however, executors only return an `ExecutorResult` — they cannot
+    // persist intermediate lifecycle state. The proper plumbing for
+    // `enterWaiting()` and `heartbeat()` is tracked in #78; until that
+    // contract lands, this poll loop only returns the terminal output
+    // and the runner's terminal `Db.update` is the single persistence
+    // point.
 
     for (;;) {
       const committedDates = await listCommitDates(input.pr);
       const hasNewCommit = committedDates.some((d) => isAfter(d, sinceMs));
       const heartbeatAt = now();
-      step.heartbeatAt = heartbeatAt;
-      step.metrics.externalWaitMs = Math.max(0, heartbeatAt - startedAt);
 
       if (hasNewCommit) {
         const summaries = await listCommitSummaries(input.pr);
