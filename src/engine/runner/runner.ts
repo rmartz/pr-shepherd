@@ -1,6 +1,7 @@
 import { Collections } from "@/db/collections";
 import { StepStatus, type StepInstance, type StepType } from "@/db/schemas";
 import type { Db } from "@/db/types";
+import { applyStepDelta, computeStepMetrics } from "@/engine/metrics/rollup";
 import type {
   ExecutorMap,
   Runner,
@@ -47,6 +48,12 @@ export function createRunner(db: Db, executors: ExecutorMap = {}): Runner {
 
   const dispatch = async (step: StepInstance): Promise<void> => {
     const startedAt = Date.now();
+    const runningStep: StepInstance = {
+      ...step,
+      status: StepStatus.Running,
+      startedAt,
+      heartbeatAt: startedAt,
+    };
     await db.update(Collections.stepInstances, step.id, {
       status: StepStatus.Running,
       startedAt,
@@ -57,7 +64,7 @@ export function createRunner(db: Db, executors: ExecutorMap = {}): Runner {
     if (executor === undefined) {
       await failStep(
         db,
-        step,
+        runningStep,
         `no executor registered for stepType ${step.stepType}`,
       );
       return;
@@ -65,14 +72,14 @@ export function createRunner(db: Db, executors: ExecutorMap = {}): Runner {
 
     let result: ExecutorResult;
     try {
-      result = await executor(step);
+      result = await executor(runningStep);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
-      await failStep(db, step, message);
+      await failStep(db, runningStep, message);
       return;
     }
 
-    await completeStep(db, step, result);
+    await completeStep(db, runningStep, result);
   };
 
   return { register, dispatch };
@@ -84,10 +91,13 @@ async function completeStep(
   result: ExecutorResult,
 ): Promise<void> {
   const completedAt = Date.now();
+  const stepDelta = computeStepMetrics({ ...step, completedAt });
+  const nextStepMetrics = addStepDelta(step.metrics, stepDelta);
   await db.update(Collections.stepInstances, step.id, {
     status: StepStatus.Completed,
     output: result.output,
     completedAt,
+    metrics: nextStepMetrics,
   });
   // Merge the step's output into the parent run's context. We re-read
   // the run rather than relying on the step's stale `runId` snapshot
@@ -103,8 +113,10 @@ async function completeStep(
     // step's completion so no data is lost.
     return;
   }
+  const nextRunMetrics = applyStepDelta(run.metrics, stepDelta);
   await db.update(Collections.workflowRuns, step.runId, {
     context: { ...run.context, ...result.output },
+    metrics: nextRunMetrics,
     updatedAt: completedAt,
   });
 }
@@ -114,10 +126,35 @@ async function failStep(
   step: StepInstance,
   message: string,
 ): Promise<void> {
+  const completedAt = Date.now();
+  const stepDelta = computeStepMetrics({ ...step, completedAt });
+  const nextStepMetrics = addStepDelta(step.metrics, stepDelta);
   await db.update(Collections.stepInstances, step.id, {
     status: StepStatus.Failed,
     error: message,
     retryCount: step.retryCount + 1,
-    completedAt: Date.now(),
+    completedAt,
+    metrics: nextStepMetrics,
   });
+  const run = await db.get(Collections.workflowRuns, step.runId);
+  if (run === undefined) {
+    return;
+  }
+  const nextRunMetrics = applyStepDelta(run.metrics, stepDelta);
+  await db.update(Collections.workflowRuns, step.runId, {
+    metrics: nextRunMetrics,
+    updatedAt: completedAt,
+  });
+}
+
+function addStepDelta(
+  current: StepInstance["metrics"],
+  delta: StepInstance["metrics"],
+): StepInstance["metrics"] {
+  return {
+    claudeMs: current.claudeMs + delta.claudeMs,
+    activeMs: current.activeMs + delta.activeMs,
+    scheduleWaitMs: current.scheduleWaitMs + delta.scheduleWaitMs,
+    externalWaitMs: current.externalWaitMs + delta.externalWaitMs,
+  };
 }
