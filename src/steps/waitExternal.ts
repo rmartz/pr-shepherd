@@ -57,6 +57,7 @@ export interface WaitProcess {
 }
 
 export type SpawnFn = (cmd: string, args: string[]) => WaitProcess;
+type TimeoutHandle = number | NodeJS.Timeout;
 
 // Grace period between SIGTERM and SIGKILL when a cancel signal fires.
 const SIGTERM_GRACE_MS = 5000;
@@ -69,7 +70,7 @@ export interface WaitExternalOptions {
   signal?: AbortSignal;
   // Injectable timer for testing the SIGKILL grace period; defaults to
   // the global setTimeout.
-  setTimeout?: (fn: () => void, ms: number) => unknown;
+  setTimeout?: (fn: () => void, ms: number) => TimeoutHandle;
 }
 
 export type WaitExternalResult =
@@ -85,8 +86,11 @@ export async function runWaitExternal(
   input: WaitExternalInput,
   opts: WaitExternalOptions = {},
 ): Promise<WaitExternalResult> {
-  const spawnFn: SpawnFn = opts.spawn ?? ((cmd, args) => nodeSpawn(cmd, args));
-  const setTimeoutFn = opts.setTimeout ?? setTimeout;
+  const spawnFn: SpawnFn =
+    opts.spawn ?? ((cmd, args) => nodeSpawn(cmd, args, { stdio: "ignore" }));
+  const setTimeoutFn =
+    opts.setTimeout ??
+    ((fn: () => void, ms: number): TimeoutHandle => setTimeout(fn, ms));
 
   const script = scriptPath(input.kind);
   const spawnArgs = [String(input.pr), ...(input.args ?? [])];
@@ -94,6 +98,7 @@ export async function runWaitExternal(
 
   return new Promise<WaitExternalResult>((resolve) => {
     let settled = false;
+    let sigkillTimer: TimeoutHandle | undefined;
 
     function settle(result: WaitExternalResult): void {
       if (!settled) {
@@ -102,22 +107,40 @@ export async function runWaitExternal(
       }
     }
 
+    function clearSigkillTimer(): void {
+      if (sigkillTimer !== undefined) {
+        clearTimeout(sigkillTimer);
+        sigkillTimer = undefined;
+      }
+    }
+
     function killChild(): void {
+      if (settled) return;
       child.kill("SIGTERM");
-      setTimeoutFn(() => {
+      sigkillTimer = setTimeoutFn(() => {
+        if (settled) return;
         child.kill("SIGKILL");
       }, SIGTERM_GRACE_MS);
     }
 
     const { signal } = opts;
     if (signal !== undefined) {
-      signal.addEventListener("abort", killChild, { once: true });
+      if (signal.aborted) {
+        killChild();
+      } else {
+        signal.addEventListener("abort", killChild, { once: true });
+      }
     }
 
-    child.on("close", (code) => {
+    function cleanup(): void {
+      clearSigkillTimer();
       if (signal !== undefined) {
         signal.removeEventListener("abort", killChild);
       }
+    }
+
+    child.on("close", (code) => {
+      cleanup();
       if (code === 0) {
         settle({ passed: true });
       } else {
@@ -126,9 +149,7 @@ export async function runWaitExternal(
     });
 
     child.on("error", () => {
-      if (signal !== undefined) {
-        signal.removeEventListener("abort", killChild);
-      }
+      cleanup();
       settle({ passed: false, reason: "error" });
     });
   });

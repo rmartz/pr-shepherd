@@ -11,6 +11,7 @@ import {
 import type { Db } from "@/db/types";
 import { runSchedulerTick, startScheduler } from "./loop";
 import type { SchedulerConfig } from "./loop";
+import { AdmissionRejectReason } from "./concurrency";
 
 // ---------------------------------------------------------------------------
 // Tests for the scheduler loop. `runSchedulerTick` is the single-pass unit
@@ -108,16 +109,22 @@ async function seedPendingStep(
   return step;
 }
 
-async function seedRunningStep(
+async function seedActiveStep(
   db: Db,
-  args: { id: string; runId: string; stepType: StepType; createdAt: number },
+  args: {
+    id: string;
+    runId: string;
+    stepType: StepType;
+    createdAt: number;
+    status?: StepStatus.Running | StepStatus.Waiting;
+  },
 ): Promise<void> {
   const step: StepInstance = {
     ...makeBaseStepInstance(),
     id: args.id,
     runId: args.runId,
     stepType: args.stepType,
-    status: StepStatus.Running,
+    status: args.status ?? StepStatus.Running,
     createdAt: args.createdAt,
     startedAt: args.createdAt + 1,
   };
@@ -238,13 +245,13 @@ describe("Active counts are derived from a Db query each tick (restart-safe)", (
     const db = createInMemoryDb();
     const run = await seedRun(db);
     // Seed two running github_api steps — global githubApiMax is 4.
-    await seedRunningStep(db, {
+    await seedActiveStep(db, {
       id: "running-1",
       runId: run.id,
       stepType: StepType.GithubApi,
       createdAt: 500,
     });
-    await seedRunningStep(db, {
+    await seedActiveStep(db, {
       id: "running-2",
       runId: run.id,
       stepType: StepType.GithubApi,
@@ -269,13 +276,13 @@ describe("Active counts are derived from a Db query each tick (restart-safe)", (
   it("rejects a candidate when existing running steps have already saturated the per-repo cap", async () => {
     const db = createInMemoryDb();
     const run = await seedRun(db);
-    await seedRunningStep(db, {
+    await seedActiveStep(db, {
       id: "running-1",
       runId: run.id,
       stepType: StepType.ClaudeSkill,
       createdAt: 500,
     });
-    await seedRunningStep(db, {
+    await seedActiveStep(db, {
       id: "running-2",
       runId: run.id,
       stepType: StepType.ClaudeSkill,
@@ -292,6 +299,33 @@ describe("Active counts are derived from a Db query each tick (restart-safe)", (
     const report = await runSchedulerTick(db, config);
     expect(report.rejected).toHaveLength(1);
     expect(report.rejected[0]?.decision.admit).toBe(false);
+  });
+
+  it("counts waiting wait_external steps against the per-repo cap", async () => {
+    const db = createInMemoryDb();
+    const run = await seedRun(db);
+    await seedActiveStep(db, {
+      id: "waiting-1",
+      runId: run.id,
+      stepType: StepType.WaitExternal,
+      status: StepStatus.Waiting,
+      createdAt: 500,
+    });
+    await seedPendingStep(db, {
+      id: "pending-1",
+      runId: run.id,
+      stepType: StepType.GithubApi,
+      createdAt: 1000,
+    });
+    const config = makeConfig();
+    config.concurrency.defaultRepoMax = 1;
+    const report = await runSchedulerTick(db, config);
+    expect(report.rejected).toHaveLength(1);
+    expect(report.rejected[0]?.stepInstanceId).toBe("pending-1");
+    expect(report.rejected[0]?.decision).toEqual({
+      admit: false,
+      reason: AdmissionRejectReason.RepoFull,
+    });
   });
 });
 

@@ -234,6 +234,23 @@ describe("runWaitExternal timeout exit captured as failed with reason: timeout",
   });
 });
 
+describe("runWaitExternal spawn error path", () => {
+  it("resolves with passed: false and reason: error and removes abort listener", async () => {
+    const proc = makeFakeProcess();
+    const controller = new AbortController();
+    const resultPromise = runWaitExternal(
+      { kind: "ci", pr: 42 },
+      { spawn: makeSpawnFn(proc), signal: controller.signal },
+    );
+    proc.emitError(new Error("spawn failed"));
+    const result = await resultPromise;
+    expect(result).toEqual({ passed: false, reason: "error" });
+
+    controller.abort();
+    expect(proc.signals).toEqual([]);
+  });
+});
+
 // ---------------------------------------------------------------------------
 // runWaitExternal — cancellation: SIGTERM then SIGKILL after grace period
 // ---------------------------------------------------------------------------
@@ -246,6 +263,7 @@ describe("runWaitExternal cancellation sends SIGTERM then SIGKILL after grace pe
     let graceFn: (() => void) | undefined;
     const fakeSetTimeout = (fn: () => void) => {
       graceFn = fn;
+      return {} as ReturnType<typeof setTimeout>;
     };
 
     const resultPromise = runWaitExternal(
@@ -267,6 +285,22 @@ describe("runWaitExternal cancellation sends SIGTERM then SIGKILL after grace pe
     expect(proc.signals).toContain("SIGKILL");
 
     // Subprocess eventually exits (killed).
+    proc.emitClose(null);
+    const result = await resultPromise;
+    expect(result.passed).toBe(false);
+  });
+
+  it("honors a pre-aborted signal before registering listeners", async () => {
+    const proc = makeFakeProcess();
+    const controller = new AbortController();
+    controller.abort();
+
+    const resultPromise = runWaitExternal(
+      { kind: "ci", pr: 42 },
+      { spawn: makeSpawnFn(proc), signal: controller.signal },
+    );
+
+    expect(proc.signals).toContain("SIGTERM");
     proc.emitClose(null);
     const result = await resultPromise;
     expect(result.passed).toBe(false);
