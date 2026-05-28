@@ -203,6 +203,25 @@ describe("runMigrations rejects malformed migration sets", () => {
       }),
     ).rejects.toThrow(/version/i);
   });
+
+  it("validates all collections up-front, so an invalid set in a later-sorted collection aborts before any earlier-sorted collection's up() runs", async () => {
+    const db = createInMemoryDb();
+    const earlierUp = vi.fn(noop);
+    // Collections are processed alphabetically: "_meta" never has user
+    // migrations, but `repositories` < `workflowRuns`. The repositories
+    // set is valid; workflowRuns has a duplicate version. Without the
+    // up-front validation, repositories' v1 would apply before the
+    // workflowRuns failure surfaced; with it, neither runs.
+    await expect(
+      runMigrations(db, {
+        [Collections.repositories.name]: [makeMigration(1, earlierUp)],
+        [Collections.workflowRuns.name]: [makeMigration(1), makeMigration(1)],
+      }),
+    ).rejects.toThrow(/duplicate/i);
+    expect(earlierUp).not.toHaveBeenCalled();
+    const meta = await db.get(Collections.meta, Collections.repositories.name);
+    expect(meta).toBeUndefined();
+  });
 });
 
 describe("runMigrations aborts on downgrade (stamped version newer than binary)", () => {

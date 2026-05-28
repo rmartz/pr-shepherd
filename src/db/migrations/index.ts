@@ -42,6 +42,22 @@ function validateMigrations(
   }
 }
 
+// Validate every collection's migration set up-front, before any
+// migration `up()` runs. A programmer error in any collection then
+// fails before the runner has touched the DB, ensuring the failed
+// run leaves no half-migrated collections behind.
+//
+// Iterates collections in the same alphabetical order the runner uses
+// so the first reported error matches what the runner would have hit.
+function validateAllMigrations(
+  migrationsByCollection: MigrationsByCollection,
+): void {
+  for (const collectionName of Object.keys(migrationsByCollection).sort()) {
+    const migrations = migrationsByCollection[collectionName] ?? [];
+    validateMigrations(collectionName, migrations);
+  }
+}
+
 async function readCurrentVersion(
   db: Db,
   collectionName: string,
@@ -71,15 +87,20 @@ async function stampVersion(
   }
 }
 
-// Forward-only migrations runner. For each collection in
-// `migrationsByCollection`:
-//   1. Read the current stamped version from `_meta/{collection}`.
-//   2. Run every migration whose version is greater than the stamp,
-//      in ascending order.
-//   3. After each successful `up()`, stamp the meta doc with that
-//      migration's version. A failure aborts the entire run (including
-//      remaining collections) with the original error, leaving the
-//      meta doc at the last successfully-applied version.
+// Forward-only migrations runner. The run has two phases:
+//
+//   Phase 1 — validate every collection's migration set up-front
+//   (`validateAllMigrations`). Any programmer error (duplicate version,
+//   non-positive version) aborts before the DB is touched.
+//
+//   Phase 2 — for each collection in alphabetical order:
+//     1. Read the current stamped version from `_meta/{collection}`.
+//     2. Run every migration whose version is greater than the stamp,
+//        in ascending order.
+//     3. After each successful `up()`, stamp the meta doc with that
+//        migration's version. A failure aborts the entire run with the
+//        original error, leaving the meta doc at the last
+//        successfully-applied version.
 //
 // Idempotent: running twice in a row applies nothing the second time.
 //
@@ -89,12 +110,14 @@ export async function runMigrations(
   db: Db,
   migrationsByCollection: MigrationsByCollection,
 ): Promise<MigrationReport> {
+  // Phase 1: validate everything before any side effects.
+  validateAllMigrations(migrationsByCollection);
+
   const applied: Record<string, number[]> = {};
   const collectionNames = Object.keys(migrationsByCollection).sort();
 
   for (const collectionName of collectionNames) {
     const migrations = migrationsByCollection[collectionName] ?? [];
-    validateMigrations(collectionName, migrations);
     const sorted = [...migrations].sort((a, b) => a.version - b.version);
     const currentVersion = await readCurrentVersion(db, collectionName);
     // Downgrade detection: if the stamped version is higher than any
