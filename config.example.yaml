@@ -7,9 +7,19 @@
 # `NEXT_PUBLIC_FIREBASE_*` environment variables on the Vercel side.
 # See ARCHITECTURE.md (#deployment-topology) for the split.
 
-# Concurrency caps for Claude subprocess execution.
+# Concurrency caps for the scheduler. Three independent dimensions:
+#   - systemMax    — global cap on active Claude subprocess invocations
+#                    (reserved for `claude_skill` steps)
+#   - githubApiMax — global cap on active GitHub API calls
+#                    (reserved for `github_api` steps; prevents 429 /
+#                    secondary-rate-limit storms across all repos)
+#   - per-repo     — applies to `claude_skill`, `github_api`, and
+#                    `wait_external` steps; see
+#                    `repositories[].concurrencyMax` below.
+# `decision` and `fork` steps are zero-cost and bypass every cap.
 concurrency:
   systemMax: 8 # max simultaneous Claude invocations across all repos
+  githubApiMax: 4 # max simultaneous GitHub API calls across all repos
   defaultRepoMax: 2 # per-repo default; overridable per `repositories[].concurrencyMax`
 
 # Repositories the daemon watches. The polling loop scans each for new PRs and
