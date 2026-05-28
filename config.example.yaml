@@ -41,9 +41,22 @@ poll:
 # `repositories`, `commands`) with rules-based separation.
 db:
   adapter: firebase-hosted # recommended default — managed Firestore (uses NEXT_PUBLIC_FIREBASE_* + service account)
-  # adapter: firebase-emulator   # local Firestore via `firebase emulators:start`; requires firebase-tools
+  # adapter: firebase-emulator   # local Firestore via `firebase emulators:start`; requires firebase-tools — see docs/local-development.md
   # adapter: leveldb             # embedded RxDB + LevelDB at logOverflowPath/../shepherd.db (UI cannot read leveldb)
   logOverflowPath: ./data/logs # step-log sidecar files when in-doc storage overflows
+
+  # Optional emulator-only settings. Consulted only when `adapter` is
+  # `firebase-emulator`. The host/port must match the Firestore emulator
+  # binding (see `firebase.json` -> emulators.firestore). This setting
+  # wires the **daemon side only**: it writes `FIRESTORE_EMULATOR_HOST`
+  # on the daemon process so the firebase-admin SDK auto-routes.
+  #
+  # The Vercel UI is a Next.js browser bundle and cannot read this
+  # config file or non-`NEXT_PUBLIC_*` env vars. For UI dev against the
+  # same emulator, also set `NEXT_PUBLIC_FIRESTORE_EMULATOR_HOST` in the
+  # UI's `.env.local` (see docs/local-development.md).
+  emulator:
+    firestoreHost: localhost:8080
 
 # Commands collection — the UI writes operator-action documents here
 # (toggle a repo's enabled flag, force-retry a step). The daemon subscribes
