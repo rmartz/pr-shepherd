@@ -18,8 +18,9 @@ import {
 // Scheduler loop (vision §4.2).
 //
 // `runSchedulerTick` is a single-pass unit that:
-//   1. Reads `pending` step instances and `running` step instances from Db.
-//   2. Derives `ActiveCounts` from the running set — this is the source of
+//   1. Reads `pending` step instances and active (`running` + `waiting`) step
+//      instances from Db.
+//   2. Derives `ActiveCounts` from that active set — this is the source of
 //      truth, not a long-lived in-process map. Doing the count fresh each
 //      tick is what makes the scheduler restart-safe: a daemon crash
 //      mid-tick leaves no stale counter state to recover. (Vision §4.2
@@ -66,21 +67,33 @@ export async function runSchedulerTick(
     return { admitted: [], rejected: [], pendingCount: 0 };
   }
 
-  // Fetch running steps and workflow runs to derive ActiveCounts and to
-  // resolve each step's owning repo. We only fetch runs referenced by
-  // pending/running steps, but the simplest correct version is to read
-  // all runs once and index by id — these collections are small relative
-  // to step volume and the per-tick cost is bounded.
+  // Fetch active steps (running + waiting). The per-repo cost matrix
+  // counts both, and ActiveCounts is derived below from the union.
   const running = await db.list(Collections.stepInstances, {
     status: StepStatus.Running,
   });
-  const runs = await db.list(Collections.workflowRuns);
+  const waiting = await db.list(Collections.stepInstances, {
+    status: StepStatus.Waiting,
+  });
+  // Fetch only the workflow runs referenced by the steps we just read.
+  // The runs collection grows linearly with PR throughput, so a blanket
+  // `db.list(workflowRuns)` would dominate per-tick latency once the
+  // daemon has been driving PRs for a while. Bounding the fetch to the
+  // distinct `runId`s on the active step set keeps the per-tick cost
+  // proportional to in-flight work rather than total history.
+  const referencedRunIds = new Set<string>();
+  for (const step of pending) referencedRunIds.add(step.runId);
+  for (const step of running) referencedRunIds.add(step.runId);
+  for (const step of waiting) referencedRunIds.add(step.runId);
   const runById = new Map<string, WorkflowRun>();
-  for (const run of runs) {
-    runById.set(run.id, run);
-  }
+  await Promise.all(
+    [...referencedRunIds].map(async (id) => {
+      const run = await db.get(Collections.workflowRuns, id);
+      if (run !== undefined) runById.set(id, run);
+    }),
+  );
 
-  const counts = deriveActiveCounts(running, runById);
+  const counts = deriveActiveCounts([...running, ...waiting], runById);
 
   // FIFO across iterations: sort by createdAt ASC. Ties broken by id so
   // the order is deterministic when timestamps collide.
@@ -145,8 +158,8 @@ function incrementCounts(
 ): void {
   if (!countsAgainstRepo(stepType)) return;
   counts.perRepo.set(repoId, (counts.perRepo.get(repoId) ?? 0) + 1);
-  // Per-step-type global dimensions. WaitExternal counts only against
-  // the repo dimension (no global cap).
+  // Per-step-type global dimensions. WaitExternal/WaitAuthorPush count
+  // only against the repo dimension (no global cap).
   switch (stepType) {
     case StepType.ClaudeSkill:
       counts.systemClaude += 1;
