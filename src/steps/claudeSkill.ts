@@ -45,7 +45,10 @@ export interface SpawnedStream {
 export interface SpawnedProcess {
   stdout: SpawnedStream | null;
   stderr: SpawnedStream | null;
-  on: ((event: "close", listener: (code: number | null) => void) => void) &
+  on: ((
+    event: "close",
+    listener: (code: number | null) => void | Promise<void>,
+  ) => void) &
     ((event: "error", listener: (err: Error) => void) => void);
   kill: (signal?: NodeJS.Signals) => boolean;
 }
@@ -180,7 +183,7 @@ export function createClaudeSkillExecutor(
         reject(err);
       });
 
-      child.on("close", (code) => {
+      child.on("close", async (code) => {
         if (settled) return;
         settled = true;
         cleanup();
@@ -190,19 +193,20 @@ export function createClaudeSkillExecutor(
         // Persist streamed logs before settling — the runner's terminal write
         // sets status/output/metrics but not logs, so this is the only place
         // they land.
-        db.update(Collections.stepInstances, step.id, { logs })
-          .then(() => {
-            if (code === 0) {
-              resolve({ output: parseOutput(stdout) });
-            } else {
-              reject(
-                new Error(
-                  `claude subprocess exited with code ${String(code)}: ${stderr.trim()}`,
-                ),
-              );
-            }
-          })
-          .catch(reject);
+        try {
+          await db.update(Collections.stepInstances, step.id, { logs });
+          if (code === 0) {
+            resolve({ output: parseOutput(stdout) });
+          } else {
+            reject(
+              new Error(
+                `claude subprocess exited with code ${String(code)}: ${stderr.trim().slice(-200)}`,
+              ),
+            );
+          }
+        } catch (err) {
+          reject(err instanceof Error ? err : new Error(String(err)));
+        }
       });
     });
   };

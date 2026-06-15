@@ -35,7 +35,7 @@ interface FakeChild {
 function makeFakeChild(): FakeChild {
   let outCb: ((chunk: string) => void) | undefined;
   let errCb: ((chunk: string) => void) | undefined;
-  let closeCb: ((code: number | null) => void) | undefined;
+  let closeCb: ((code: number | null) => void | Promise<void>) | undefined;
   let errorCb: ((err: Error) => void) | undefined;
   const kill = vi.fn((): boolean => true);
   const child = {
@@ -51,7 +51,7 @@ function makeFakeChild(): FakeChild {
     },
     on: (event: "close" | "error", listener: (arg: never) => void) => {
       if (event === "close")
-        closeCb = listener as (code: number | null) => void;
+        closeCb = listener as (code: number | null) => void | Promise<void>;
       else errorCb = listener as (err: Error) => void;
     },
     kill,
@@ -61,7 +61,7 @@ function makeFakeChild(): FakeChild {
     kill,
     emitOut: (s) => outCb?.(s),
     emitErr: (s) => errCb?.(s),
-    emitClose: (code) => closeCb?.(code),
+    emitClose: (code) => { void closeCb?.(code); },
     emitError: (err) => errorCb?.(err),
   };
 }
@@ -219,6 +219,20 @@ describe("claudeSkillExecutor fails on a non-zero exit", () => {
     fake.emitClose(2);
     await expect(promise).rejects.toThrow(
       "claude subprocess exited with code 2: boom",
+    );
+  });
+
+  it("truncates stderr to its last 200 characters in the error message", async () => {
+    const db = createInMemoryDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!);
+    fake.emitErr("x".repeat(300));
+    fake.emitClose(1);
+    await expect(promise).rejects.toThrow(
+      "claude subprocess exited with code 1: " + "x".repeat(200),
     );
   });
 });
