@@ -4,7 +4,7 @@ import { tmpdir } from "node:os";
 import { dirname, join } from "node:path";
 import { fileURLToPath } from "node:url";
 import { loadConfig, ConfigError } from "./loader";
-import { DbAdapter } from "./schema";
+import { DbAdapterKind } from "../db";
 
 // A complete, valid config object. `make*` overrides let each test bend a
 // single field so a failure points at exactly one cause.
@@ -67,7 +67,7 @@ describe("loadConfig loads and validates a valid config", () => {
     expect(config.concurrency.systemMax).toBe(8);
     expect(config.repositories[0]?.id).toBe("owner/example-repo");
     expect(config.repositories[0]?.workflows[1]?.workflowId).toBe("base-pr");
-    expect(config.db.adapter).toBe(DbAdapter.FirebaseHosted);
+    expect(config.db.adapter).toBe(DbAdapterKind.FirebaseHosted);
   });
 });
 
@@ -81,7 +81,7 @@ describe("the committed config.example.yaml satisfies the schema", () => {
     const config = loadConfig(examplePath);
 
     expect(config.repositories.length).toBeGreaterThan(0);
-    expect(config.db.adapter).toBe(DbAdapter.FirebaseHosted);
+    expect(config.db.adapter).toBe(DbAdapterKind.FirebaseHosted);
   });
 });
 

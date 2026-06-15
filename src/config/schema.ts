@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { DbAdapterKind } from "../db";
 
 // Zod schema for the daemon's operator `config.yaml`. Mirrors
 // `config.example.yaml` at the repo root, which is the committed template
@@ -52,16 +53,6 @@ const PollSchema = z
   })
   .strict();
 
-// Enumerates the supported data-store adapters. Mirrors `DbAdapterKind` in
-// `src/db/index.ts`; an enum constrains the YAML value to the four known
-// adapters and produces a clear rejection message for typos.
-export enum DbAdapter {
-  FirebaseEmulator = "firebase-emulator",
-  FirebaseHosted = "firebase-hosted",
-  InMemory = "in-memory",
-  Leveldb = "leveldb",
-}
-
 const EmulatorSchema = z
   .object({
     firestoreHost: z.string().min(1).default("localhost:8080"),
@@ -73,7 +64,7 @@ const EmulatorSchema = z
 // pre-declares it is accepted.
 const DbSchema = z
   .object({
-    adapter: z.enum(DbAdapter),
+    adapter: z.enum(DbAdapterKind),
     logOverflowPath: z.string().min(1).default("./data/logs"),
     emulator: EmulatorSchema.optional(),
   })

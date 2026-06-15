@@ -5,12 +5,12 @@
 //   - `ConfigError` to distinguish config failures from other errors
 //   - `Config` / `RepositoryConfig` / `ConcurrencyConfig` types
 //   - `ConfigSchema` for callers that already hold parsed YAML
-//   - `DbAdapter` enum for the data-store adapter selection
+//   - `DbAdapterKind` enum for the data-store adapter selection
 export { loadConfig, ConfigError } from "./loader";
 export {
   ConfigSchema,
-  DbAdapter,
   type Config,
   type ConcurrencyConfig,
   type RepositoryConfig,
 } from "./schema";
+export { DbAdapterKind } from "../db";
