@@ -7,7 +7,7 @@ import {
   StepType,
   type StepInstance,
 } from "@/db/schemas";
-import type { Db } from "@/db/types";
+import type { CollectionDef, Db, Filter, SubscriptionCallback } from "@/db/types";
 import { monitorHeartbeats } from "./heartbeat";
 
 function makeBaseStepInstance(): Omit<
@@ -215,5 +215,47 @@ describe("monitorHeartbeats", () => {
         retriedStepInstanceId: expect.any(String),
       },
     ]);
+  });
+
+  it("skips a step whose heartbeat refreshed between list and re-read (TOCTOU guard)", async () => {
+    const baseDb = createInMemoryDb();
+    await seedRun(baseDb);
+    await seedRunningStep(baseDb, { id: "step-racing", heartbeatAt: 10_000 });
+
+    // Simulate a concurrent runner that refreshed heartbeatAt after the initial
+    // list but before the per-step re-read inside monitorHeartbeats.
+    const racingDb: Db = {
+      get: async <T>(coll: CollectionDef<T>, id: string): Promise<T | undefined> => {
+        const doc = await baseDb.get(coll, id);
+        if (id === "step-racing" && doc !== undefined) {
+          return {
+            ...(doc as Record<string, unknown>),
+            heartbeatAt: 115_000,
+          } as unknown as T;
+        }
+        return doc;
+      },
+      list: <T>(coll: CollectionDef<T>, filter?: Filter<T>) =>
+        baseDb.list(coll, filter),
+      create: <T>(coll: CollectionDef<T>, doc: T) => baseDb.create(coll, doc),
+      update: <T>(coll: CollectionDef<T>, id: string, patch: Partial<T>) =>
+        baseDb.update(coll, id, patch),
+      delete: <T>(coll: CollectionDef<T>, id: string) =>
+        baseDb.delete(coll, id),
+      subscribe: <T>(
+        coll: CollectionDef<T>,
+        filter: Filter<T> | undefined,
+        onChange: SubscriptionCallback<T>,
+      ) => baseDb.subscribe(coll, filter, onChange),
+    };
+
+    const failed = await monitorHeartbeats(racingDb, {
+      poll: { heartbeatIntervalSeconds: 15 },
+      nowMs: () => 120_000,
+    });
+
+    expect(failed).toEqual([]);
+    const step = await baseDb.get(Collections.stepInstances, "step-racing");
+    expect(step?.status).toBe(StepStatus.Running);
   });
 });

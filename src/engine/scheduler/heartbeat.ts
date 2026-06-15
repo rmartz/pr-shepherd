@@ -40,6 +40,18 @@ export async function monitorHeartbeats(
 
   const failures: HeartbeatFailure[] = [];
   for (const step of stale) {
+    // Re-read before failing: a runner may have refreshed heartbeatAt after
+    // the initial list (TOCTOU). Skip if the step is no longer stale.
+    const current = await db.get(Collections.stepInstances, step.id);
+    if (
+      current === undefined ||
+      current.status !== StepStatus.Running ||
+      current.heartbeatAt === undefined ||
+      current.heartbeatAt >= staleBeforeMs
+    ) {
+      continue;
+    }
+
     await db.update(Collections.stepInstances, step.id, {
       status: StepStatus.Failed,
       error: HEARTBEAT_TIMEOUT_ERROR,
@@ -47,11 +59,11 @@ export async function monitorHeartbeats(
     });
 
     let retriedStepInstanceId: string | undefined;
-    if (step.retryCount < step.maxRetries) {
+    if (current.retryCount < current.maxRetries) {
       retriedStepInstanceId = config.newStepId?.() ?? crypto.randomUUID();
       await db.create(
         Collections.stepInstances,
-        makePendingRetryStep(step, retriedStepInstanceId, currentTimeMs),
+        makePendingRetryStep(current, retriedStepInstanceId, currentTimeMs),
       );
     }
 
