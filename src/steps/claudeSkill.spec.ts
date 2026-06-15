@@ -61,7 +61,9 @@ function makeFakeChild(): FakeChild {
     kill,
     emitOut: (s) => outCb?.(s),
     emitErr: (s) => errCb?.(s),
-    emitClose: (code) => { void closeCb?.(code); },
+    emitClose: (code) => {
+      void closeCb?.(code);
+    },
     emitError: (err) => errorCb?.(err),
   };
 }
