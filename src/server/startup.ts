@@ -5,6 +5,10 @@ import {
   type MigrationsByCollection,
 } from "@/db/migrations";
 import type { Db } from "@/db/types";
+import {
+  recoverFromCrash,
+  type CrashRecoveryReport,
+} from "@/engine/recovery/startup";
 
 export interface StartDaemonOptions {
   // Override the default migrations registry. Tests pass a synthetic
@@ -15,6 +19,7 @@ export interface StartDaemonOptions {
 
 export interface StartDaemonResult {
   migrationReport: MigrationReport;
+  crashRecoveryReport: CrashRecoveryReport;
 }
 
 // Daemon startup entry point. Currently runs the migrations runner
@@ -33,5 +38,6 @@ export async function startDaemon(
     db,
     options.migrations ?? defaultMigrations,
   );
-  return { migrationReport };
+  const crashRecoveryReport = await recoverFromCrash(db);
+  return { migrationReport, crashRecoveryReport };
 }

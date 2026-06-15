@@ -106,15 +106,16 @@ On startup, recovery (§8.2) finds any `workflowRuns` left in `running` status f
 
 ## Step Executors
 
-| Step type       | Executor                                              | Counts against | Notes                                        |
-| --------------- | ----------------------------------------------------- | -------------- | -------------------------------------------- |
-| `claude_skill`  | Spawn `claude -p "<skill> <pr>"` subprocess           | global + repo  | Updates Claude time bucket                   |
-| `wait_external` | Spawn `wait-for-ci.py` / `wait-for-copilot-review.py` | repo only      | Holds `waiting` status; no global slot used  |
-| `github_api`    | Direct `gh` CLI or MCP call                           | repo only      | Label changes, comment posts, branch updates |
-| `decision`      | Pure in-process routing evaluation                    | neither        | Instantaneous                                |
-| `fork`          | Create child `workflowRun` + first step               | neither        | Used to spawn Dependabot fix PRs             |
+| Step type          | Executor                                              | Counts against | Notes                                        |
+| ------------------ | ----------------------------------------------------- | -------------- | -------------------------------------------- |
+| `claude_skill`     | Spawn `claude -p "<skill> <pr>"` subprocess           | global + repo  | Updates Claude time bucket                   |
+| `wait_author_push` | Poll PR commits after review requested changes        | repo only      | 24h default timeout; heartbeat while waiting |
+| `wait_external`    | Spawn `wait-for-ci.py` / `wait-for-copilot-review.py` | repo only      | Holds `waiting` status; no global slot used  |
+| `github_api`       | Direct `gh` CLI or MCP call                           | repo only      | Label changes, comment posts, branch updates |
+| `decision`         | Pure in-process routing evaluation                    | neither        | Instantaneous                                |
+| `fork`             | Create child `workflowRun` + first step               | neither        | Used to spawn Dependabot fix PRs             |
 
-`wait_external` does not hold a global Claude slot while waiting — this prevents long external waits from blocking other repos' Claude work.
+`wait_external` and `wait_author_push` do not hold a global Claude slot while waiting — this prevents long external waits from blocking other repos' Claude work.
 
 ## Routing DSL
 

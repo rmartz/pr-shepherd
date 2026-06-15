@@ -25,5 +25,6 @@ export enum StepType {
   Decision = "decision",
   Fork = "fork",
   GithubApi = "github_api",
+  WaitAuthorPush = "wait_author_push",
   WaitExternal = "wait_external",
 }
