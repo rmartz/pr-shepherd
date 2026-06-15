@@ -7,7 +7,12 @@ import {
   StepType,
   type StepInstance,
 } from "@/db/schemas";
-import type { CollectionDef, Db, Filter, SubscriptionCallback } from "@/db/types";
+import type {
+  CollectionDef,
+  Db,
+  Filter,
+  SubscriptionCallback,
+} from "@/db/types";
 import { monitorHeartbeats } from "./heartbeat";
 
 function makeBaseStepInstance(): Omit<
@@ -225,7 +230,10 @@ describe("monitorHeartbeats", () => {
     // Simulate a concurrent runner that refreshed heartbeatAt after the initial
     // list but before the per-step re-read inside monitorHeartbeats.
     const racingDb: Db = {
-      get: async <T>(coll: CollectionDef<T>, id: string): Promise<T | undefined> => {
+      get: async <T>(
+        coll: CollectionDef<T>,
+        id: string,
+      ): Promise<T | undefined> => {
         const doc = await baseDb.get(coll, id);
         if (id === "step-racing" && doc !== undefined) {
           return {

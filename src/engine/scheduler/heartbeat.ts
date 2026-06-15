@@ -44,8 +44,7 @@ export async function monitorHeartbeats(
     // the initial list (TOCTOU). Skip if the step is no longer stale.
     const current = await db.get(Collections.stepInstances, step.id);
     if (
-      current === undefined ||
-      current.status !== StepStatus.Running ||
+      current?.status !== StepStatus.Running ||
       current.heartbeatAt === undefined ||
       current.heartbeatAt >= staleBeforeMs
     ) {
