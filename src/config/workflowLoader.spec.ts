@@ -121,3 +121,29 @@ steps:
     expect(() => loadWorkflow(yaml)).toThrow(/verdict/);
   });
 });
+
+describe("loadWorkflow rejects duplicate step ids", () => {
+  it("throws a WorkflowLoadError naming the workflow id and duplicate step id", () => {
+    const yaml = `
+id: base-pr
+version: 1
+steps:
+  - id: review
+    stepType: claude_skill
+    input: {}
+    routing:
+      - condition: "true"
+        next: null
+  - id: review
+    stepType: wait_external
+    input: {}
+    routing:
+      - condition: "true"
+        next: null
+`;
+
+    expect(() => loadWorkflow(yaml)).toThrow(WorkflowLoadError);
+    expect(() => loadWorkflow(yaml)).toThrow(/base-pr/);
+    expect(() => loadWorkflow(yaml)).toThrow(/review/);
+  });
+});

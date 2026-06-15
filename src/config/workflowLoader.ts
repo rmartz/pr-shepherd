@@ -100,12 +100,20 @@ function parseYamlSource(source: string): unknown {
   }
 }
 
-// Cross-step validation: confirm every `next` resolves to a defined step and
-// every routing condition is a well-formed DSL expression. Both checks are
-// reported with the workflow id + step id so a defect is traceable without
-// re-reading the YAML.
+// Cross-step validation: confirm step IDs are unique, every `next` resolves
+// to a defined step, and every routing condition is a well-formed DSL
+// expression. All checks are reported with the workflow id + step id so a
+// defect is traceable without re-reading the YAML.
 function validateRouting(graph: ValidatedGraph): void {
-  const stepIds = new Set(graph.steps.map((step) => step.id));
+  const stepIds = new Set<string>();
+  for (const step of graph.steps) {
+    if (stepIds.has(step.id)) {
+      throw new WorkflowLoadError(
+        `Workflow "${graph.id}" has duplicate step id "${step.id}".`,
+      );
+    }
+    stepIds.add(step.id);
+  }
 
   for (const step of graph.steps) {
     for (const rule of step.routing) {
