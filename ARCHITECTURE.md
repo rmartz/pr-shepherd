@@ -1,6 +1,6 @@
 # Technical Architecture Reference
 
-This document captures non-business-logic technical decisions, patterns, and infrastructure setup for the PR Shepherd daemon. For the full design rationale and open questions, see the [vision document](https://github.com/rmartz/pr-shepherd/issues/1).
+This document captures non-business-logic technical decisions, patterns, and infrastructure setup for the PR Shepherd daemon. For the full design rationale and open questions, see the [vision document](https://github.com/rmartz/pr-shepherd/issues/1). For the goal-state design of the PR-lifecycle subsystem (state model, gate model, orchestration, and the polling→webhooks evolution), see [docs/design/pr-lifecycle.md](docs/design/pr-lifecycle.md).
 
 ## Stack
 
