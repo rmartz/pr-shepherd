@@ -4,4 +4,6 @@ dist
 .claude
 src/components/ui
 pnpm-lock.yaml
+package-lock.json
+yarn.lock
 .git-worktrees
