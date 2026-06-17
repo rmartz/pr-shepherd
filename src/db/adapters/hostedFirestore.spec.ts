@@ -58,6 +58,39 @@ class FakeAdminQuery {
     return new FakeAdminQuery(this.store, [...this.filters, { field, value }]);
   }
 
+  // Admin-SDK realtime listener fake. Mirrors the real `Query.onSnapshot`:
+  // emits the current (filtered) snapshot immediately, re-dispatches on every
+  // admin-side mutation via the shared `listeners` registry, and returns a
+  // synchronous unsubscribe. The `onError` callback is omitted — backoff and
+  // error recovery are covered in `firestoreAdminSubscription.spec.ts`; this
+  // fake only needs the happy path so the hosted-adapter CRUD tests typecheck.
+  onSnapshot(
+    onNext: (snap: { docs: { id: string; data: () => unknown }[] }) => void,
+  ): () => void {
+    const filters = this.filters;
+    const store = this.store;
+    const dispatch = (): void => {
+      const docs = Array.from(store.entries())
+        .filter(([, data]) =>
+          filters.every(
+            (f) => (data as Record<string, unknown>)[f.field] === f.value,
+          ),
+        )
+        .map(([id, data]) => ({ id, data: () => data }));
+      onNext({ docs });
+    };
+    dispatch();
+    const existing = listeners.get(store) ?? [];
+    existing.push(dispatch);
+    listeners.set(store, existing);
+    return () => {
+      const list = listeners.get(store);
+      if (!list) return;
+      const idx = list.indexOf(dispatch);
+      if (idx !== -1) list.splice(idx, 1);
+    };
+  }
+
   // eslint-disable-next-line @typescript-eslint/require-await
   async get(): Promise<FakeQuerySnapshot> {
     const docs: FakeQuerySnapshotDoc[] = [];
