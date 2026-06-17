@@ -8,6 +8,13 @@ import type {
   ReviewSnapshot,
   ReviewThreadSnapshot,
 } from "./types";
+import type {
+  GqlConnection,
+  GraphqlResponse,
+  RestComment,
+  RestReview,
+} from "./snapshot-graphql";
+import { SNAPSHOT_QUERY } from "./snapshot-graphql";
 
 // ---------------------------------------------------------------------------
 // PR state snapshot fetcher (Epic 10, #95).
@@ -174,116 +181,6 @@ function defaultSleep(ms: number): Promise<void> {
   return new Promise<void>((resolve) => {
     setTimeout(resolve, ms);
   });
-}
-
-// --- GraphQL query ---------------------------------------------------------
-
-const SNAPSHOT_QUERY = `query PrSnapshot($owner: String!, $name: String!, $number: Int!) {
-  repository(owner: $owner, name: $name) {
-    pullRequest(number: $number) {
-      number
-      title
-      isDraft
-      mergeable
-      baseRefName
-      headRefName
-      author { login }
-      labels(first: 100) { nodes { name } }
-      commits(last: 100) { nodes { commit { oid } } }
-      headCommit: commits(last: 1) {
-        nodes {
-          commit {
-            oid
-            checkSuites(first: 50) {
-              nodes {
-                app { name }
-                status
-                conclusion
-                workflowRun { workflow { name } }
-              }
-            }
-            status { contexts { context state description targetUrl } }
-          }
-        }
-      }
-      reviewThreads(last: 100) {
-        nodes {
-          id
-          isResolved
-          isOutdated
-          comments(first: 1) { nodes { author { login } } }
-        }
-      }
-    }
-  }
-}`;
-
-// --- Raw response shapes (lightly typed; mapping is defensive) --------------
-
-interface GqlConnection<T> {
-  nodes?: (T | null)[] | null;
-}
-interface GqlActor {
-  login?: string;
-}
-interface GqlCommitNode {
-  commit?: { oid?: string };
-}
-interface GqlCheckSuite {
-  app?: { name?: string } | null;
-  status?: string;
-  conclusion?: string | null;
-  workflowRun?: { workflow?: { name?: string } | null } | null;
-}
-interface GqlStatusContext {
-  context?: string;
-  state?: string;
-  description?: string | null;
-  targetUrl?: string | null;
-}
-interface GqlHeadCommitNode {
-  commit?: {
-    oid?: string;
-    checkSuites?: GqlConnection<GqlCheckSuite>;
-    status?: { contexts?: GqlStatusContext[] | null } | null;
-  };
-}
-interface GqlReviewThread {
-  id?: string;
-  isResolved?: boolean;
-  isOutdated?: boolean;
-  comments?: GqlConnection<{ author?: GqlActor | null }>;
-}
-interface GraphqlResponse {
-  repository?: {
-    pullRequest?: {
-      number?: number;
-      title?: string;
-      isDraft?: boolean;
-      mergeable?: string;
-      baseRefName?: string;
-      headRefName?: string;
-      author?: GqlActor | null;
-      labels?: GqlConnection<{ name?: string }>;
-      commits?: GqlConnection<GqlCommitNode>;
-      headCommit?: GqlConnection<GqlHeadCommitNode>;
-      reviewThreads?: GqlConnection<GqlReviewThread>;
-    } | null;
-  } | null;
-}
-interface RestReview {
-  id?: number;
-  user?: { login?: string } | null;
-  state?: string;
-  submitted_at?: string;
-  commit_id?: string;
-  body?: string;
-}
-interface RestComment {
-  id?: number;
-  user?: { login?: string } | null;
-  body?: string;
-  created_at?: string;
 }
 
 function nodesOf<T>(connection: GqlConnection<T> | undefined): T[] {
