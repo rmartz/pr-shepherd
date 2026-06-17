@@ -16,6 +16,7 @@ export default tseslint.config(
       ".git-worktrees/**",
       "storybook-static/**",
       "vitest.config.mts",
+      "lint-staged.config.mjs",
       "src/components/ui/**",
     ],
   },
