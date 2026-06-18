@@ -30,9 +30,14 @@ function makeRepo(overrides: Partial<Repository> = {}): Repository {
   };
 }
 
+interface LiveListener {
+  dispatch: () => void;
+  onError: (err: Error) => void;
+}
+
 interface FakeCollection {
   store: Map<string, unknown>;
-  listeners: Set<() => void>;
+  listeners: Set<LiveListener>;
   // Set to a non-undefined error to make the next onSnapshot attach fail by
   // invoking its onError. Cleared after firing so a re-subscribe can succeed.
   nextError: Error | undefined;
@@ -58,12 +63,23 @@ class FakeAdmin implements AdminFirestoreLike {
   insert(name: string, id: string, data: unknown): void {
     const c = this.coll(name);
     c.store.set(id, data);
-    for (const l of [...c.listeners]) l();
+    for (const l of [...c.listeners]) l.dispatch();
   }
 
   // Force the next onSnapshot on `name` to fail via its onError callback.
   failNext(name: string): void {
     this.coll(name).nextError = new Error("transient stream drop");
+  }
+
+  // Drop every live listener on `name` via its onError callback, mirroring a
+  // transient stream drop on an already-attached subscription. The admin SDK
+  // emits no further callbacks after onError, so the listener is removed.
+  errorLive(name: string): void {
+    const c = this.coll(name);
+    for (const l of [...c.listeners]) {
+      c.listeners.delete(l);
+      l.onError(new Error("transient stream drop"));
+    }
   }
 
   listenerCount(name: string): number {
@@ -95,11 +111,14 @@ class FakeAdmin implements AdminFirestoreLike {
           return () => undefined;
         }
         onNext(snapshot());
-        const dispatch = (): void => {
-          onNext(snapshot());
+        const listener: LiveListener = {
+          dispatch: () => {
+            onNext(snapshot());
+          },
+          onError,
         };
-        c.listeners.add(dispatch);
-        return () => c.listeners.delete(dispatch);
+        c.listeners.add(listener);
+        return () => c.listeners.delete(listener);
       },
     };
   }
@@ -241,6 +260,41 @@ describe("admin subscription recovers from transient stream errors", () => {
       expect(onChange).toHaveBeenCalledTimes(1);
     });
     expect(admin.listenerCount(Collections.repositories.name)).toBe(1);
+    mgr.closeAll();
+  });
+
+  it("resets backoff after a reconnect so a later drop re-uses the base delay", async () => {
+    const admin = new FakeAdmin();
+    const delays: number[] = [];
+    const timers: (() => void)[] = [];
+    const mgr = makeManager(admin, {
+      baseBackoffMs: 10,
+      setTimer: (cb, ms) => {
+        delays.push(ms);
+        timers.push(cb);
+        return 0 as unknown as ReturnType<typeof setTimeout>;
+      },
+      clearTimer: () => undefined,
+    });
+    admin.failNext(Collections.repositories.name);
+    const onChange = vi.fn();
+    mgr.subscribe(Collections.repositories, undefined, onChange);
+    // First drop scheduled a retry at the base delay.
+    await vi.waitFor(() => {
+      expect(delays).toEqual([10]);
+    });
+    // Fire the retry: the second attach succeeds, delivers a snapshot, and
+    // resets the failure count.
+    timers[0]?.();
+    await vi.waitFor(() => {
+      expect(onChange).toHaveBeenCalledTimes(1);
+    });
+    // A second, independent drop on the now-healthy stream must re-use the base
+    // delay — not double it — proving the counter reset on reconnect.
+    admin.errorLive(Collections.repositories.name);
+    await vi.waitFor(() => {
+      expect(delays).toEqual([10, 10]);
+    });
     mgr.closeAll();
   });
 

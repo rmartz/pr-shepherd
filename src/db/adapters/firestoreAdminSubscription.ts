@@ -46,10 +46,15 @@ export interface AdminSubscriptionManagerOptions {
 
 // One live subscription's mutable state. `detach` is replaced on every
 // (re)attach so `unsubscribe` always tears down the current listener.
+// `attempt` is the consecutive-failure count that drives backoff; it lives
+// here (not as an `attach` closure parameter) so `onNext` can reset it to 0
+// once a snapshot arrives — an intermittent stream then restarts from the base
+// delay instead of ratcheting up across the daemon's lifetime.
 interface ActiveSubscription {
   cancelled: boolean;
   detach: (() => void) | undefined;
   backoffTimer: ReturnType<typeof setTimeout> | undefined;
+  attempt: number;
 }
 
 // Read `cancelled` through a function so TypeScript's control-flow analysis
@@ -92,20 +97,21 @@ export class AdminSubscriptionManager {
       cancelled: false,
       detach: undefined,
       backoffTimer: undefined,
+      attempt: 0,
     };
     this.active.add(sub);
 
     // Attach asynchronously: the admin handle loads via dynamic import in
-    // production. `attempt` tracks consecutive failures for backoff and resets
-    // to 0 once a snapshot arrives, so an intermittent stream doesn't ratchet
-    // the delay up permanently.
-    const attach = async (attempt: number): Promise<void> => {
+    // production. `sub.attempt` tracks consecutive failures for backoff and is
+    // reset to 0 once a snapshot arrives, so an intermittent stream doesn't
+    // ratchet the delay up permanently.
+    const attach = async (): Promise<void> => {
       if (isCancelled(sub)) return;
       let admin: AdminFirestoreLike;
       try {
         admin = await this.loadAdmin();
       } catch {
-        this.scheduleRetry(sub, attempt, attach);
+        this.scheduleRetry(sub, attach);
         return;
       }
       // Re-check after the async load: `unsubscribe`/`closeAll` may have
@@ -116,6 +122,10 @@ export class AdminSubscriptionManager {
       const query = this.buildQuery(admin, coll, filter);
       sub.detach = query.onSnapshot(
         (snap) => {
+          // A snapshot proves the stream is healthy, so clear the failure
+          // count: a later transient drop restarts from the base delay rather
+          // than the ratcheted-up one.
+          sub.attempt = 0;
           onChange(snap.docs.map((d) => coll.schema.parse(d.data())));
         },
         () => {
@@ -123,12 +133,13 @@ export class AdminSubscriptionManager {
           // after `onError`. Drop the dead handle and re-attach with backoff.
           sub.detach = undefined;
           if (sub.cancelled) return;
-          this.scheduleRetry(sub, attempt + 1, attach);
+          sub.attempt += 1;
+          this.scheduleRetry(sub, attach);
         },
       );
     };
 
-    void attach(0);
+    void attach();
 
     return () => {
       if (sub.cancelled) return;
@@ -169,17 +180,16 @@ export class AdminSubscriptionManager {
 
   private scheduleRetry(
     sub: ActiveSubscription,
-    attempt: number,
-    attach: (attempt: number) => Promise<void>,
+    attach: () => Promise<void>,
   ): void {
     if (sub.cancelled) return;
     const delay = Math.min(
-      this.baseBackoffMs * 2 ** Math.max(0, attempt - 1),
+      this.baseBackoffMs * 2 ** Math.max(0, sub.attempt - 1),
       this.maxBackoffMs,
     );
     sub.backoffTimer = this.setTimer(() => {
       sub.backoffTimer = undefined;
-      void attach(attempt);
+      void attach();
     }, delay);
   }
 
