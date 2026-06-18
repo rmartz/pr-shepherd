@@ -23,7 +23,7 @@ const INFRA_CANCEL_CONCLUSIONS = new Set([
 ]);
 
 // Conclusions that mean a genuine failure the author must fix.
-const FAILURE_CONCLUSIONS = new Set(["ACTION_REQUIRED_FAILURE", "FAILURE"]);
+const FAILURE_CONCLUSIONS = new Set(["FAILURE"]);
 
 function isActionsSuite(suite: CheckSuiteSnapshot): boolean {
   return (suite.appName ?? "").toLowerCase() === ACTIONS_APP;

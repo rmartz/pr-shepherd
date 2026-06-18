@@ -21,7 +21,7 @@ describe("UATState: progresses with labels", () => {
   });
 
   it("is DECISION_PENDING when UAT is required but no readiness/result is set", () => {
-    const snap = makePrSnapshot({ labels: ["needs UAT"] });
+    const snap = makePrSnapshot({ labels: ["UAT pending"] });
     expect(derivePrState(snap).uat).toBe(UATState.DecisionPending);
   });
 });

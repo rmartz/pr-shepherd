@@ -19,7 +19,12 @@ import { deriveActivity, deriveHold } from "./hold-activity-axis";
 // ---------------------------------------------------------------------------
 
 const UAT_READY_LABELS = new Set(["ready for uat", "ready-for-uat"]);
-const UAT_REQUIRED_LABELS = new Set(["needs uat", "needs-uat", "uat"]);
+const UAT_REQUIRED_LABELS = new Set([
+  "needs uat",
+  "needs-uat",
+  "uat",
+  "uat pending",
+]);
 const UAT_TESTED_LABELS = new Set(["tested"]);
 
 function hasLabel(snapshot: PrSnapshot, candidates: Set<string>): boolean {
