@@ -15,3 +15,15 @@ export type {
   ReviewThreadSnapshot,
   IssueCommentSnapshot,
 } from "./types";
+export { derivePrState } from "./axes";
+export {
+  Activity,
+  CIState,
+  CopilotState,
+  HoldState,
+  MergeConflict,
+  ReviewState,
+  ThreadState,
+  UATState,
+} from "./state-vector";
+export type { DeriveContext, PrStateVector } from "./state-vector";
