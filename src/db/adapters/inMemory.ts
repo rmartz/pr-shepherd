@@ -151,6 +151,12 @@ class InMemoryDb implements Db {
       if (idx !== -1) list.splice(idx, 1);
     };
   }
+
+  // Drop every registered subscription so a graceful-shutdown teardown leaves
+  // no live callback. Mirrors the hosted adapter's listener detach.
+  closeSubscriptions(): void {
+    this.subs.clear();
+  }
 }
 
 export function createInMemoryDb(): Db {

@@ -16,7 +16,10 @@ export type {
 export { Collections } from "./collections";
 export * from "./schemas";
 
-import { createHostedFirestoreDb } from "./adapters/hostedFirestore";
+import {
+  createHostedFirestoreDb,
+  SubscriptionSource,
+} from "./adapters/hostedFirestore";
 import { createInMemoryDb } from "./adapters/inMemory";
 import type { Db } from "./types";
 
@@ -25,11 +28,12 @@ import type { Db } from "./types";
 //   - `firebase-hosted`  — production path, implemented in #38
 //   - `firebase-emulator`— local dev path, implemented in #39
 //   - `leveldb`          — stretch goal, not in current scope
-export type DbAdapterKind =
-  | "firebase-emulator"
-  | "firebase-hosted"
-  | "in-memory"
-  | "leveldb";
+export enum DbAdapterKind {
+  FirebaseEmulator = "firebase-emulator",
+  FirebaseHosted = "firebase-hosted",
+  InMemory = "in-memory",
+  Leveldb = "leveldb",
+}
 
 // Optional emulator configuration. Only consulted when
 // `adapter == "firebase-emulator"`. `firestoreHost` may be a `host:port`
@@ -64,13 +68,18 @@ function clearEmulatorEnv(): void {
 
 export function createDb(config: DbConfig): Db {
   switch (config.adapter) {
-    case "firebase-hosted":
+    case DbAdapterKind.FirebaseHosted:
       clearEmulatorEnv();
-      return createHostedFirestoreDb();
-    case "in-memory":
+      // The daemon owns this factory; subscriptions go through the admin SDK
+      // (rules-bypassing, any collection). The UI subscribes via the client
+      // SDK directly (`src/lib/firebase/client`), not through `createDb`.
+      return createHostedFirestoreDb({
+        subscriptionSource: SubscriptionSource.Admin,
+      });
+    case DbAdapterKind.InMemory:
       clearEmulatorEnv();
       return createInMemoryDb();
-    case "firebase-emulator": {
+    case DbAdapterKind.FirebaseEmulator: {
       // The Firebase admin SDK reads `FIRESTORE_EMULATOR_HOST` natively
       // and routes every collection/doc call to the emulator when set.
       // Setting the variable here is what makes the otherwise-identical
@@ -81,9 +90,11 @@ export function createDb(config: DbConfig): Db {
       const host =
         config.emulator?.firestoreHost ?? DEFAULT_EMULATOR_FIRESTORE_HOST;
       process.env["FIRESTORE_EMULATOR_HOST"] = host;
-      return createHostedFirestoreDb();
+      return createHostedFirestoreDb({
+        subscriptionSource: SubscriptionSource.Admin,
+      });
     }
-    case "leveldb":
+    case DbAdapterKind.Leveldb:
       clearEmulatorEnv();
       throw new Error(
         `Adapter "leveldb" is out of scope for v1 — see Epic 2 stretch goal.`,

@@ -40,4 +40,8 @@ export interface Db {
     filter: Filter<T> | undefined,
     onChange: SubscriptionCallback<T>,
   ): Unsubscribe;
+  // Detach every active subscription. Called on graceful daemon shutdown so no
+  // realtime listener (or pending re-subscribe) outlives the process. A no-op
+  // when no subscriptions are open.
+  closeSubscriptions(): void;
 }

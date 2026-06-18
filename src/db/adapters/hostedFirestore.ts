@@ -8,61 +8,37 @@ import type {
   SubscriptionCallback,
   Unsubscribe,
 } from "../types";
+import { AdminSubscriptionManager } from "./firestoreAdminSubscription";
+import type { AdminFirestoreLike, AdminQuery } from "./firestoreAdminTypes";
 
 // ---------------------------------------------------------------------------
 // Hosted Firestore adapter.
 //
 // Writes go through `firebase-admin/firestore` (service-account credentials,
-// daemon-side). Reactive subscriptions wrap `firebase/firestore`'s
-// `onSnapshot` so the Vercel-hosted UI gets push-style updates gated by
-// `firestore.rules`.
+// daemon-side). Reactive subscriptions have two paths selected by
+// `subscriptionSource`:
+//   - `"client"` (default) wraps `firebase/firestore`'s `onSnapshot` so the
+//     Vercel-hosted UI gets push-style updates gated by `firestore.rules`.
+//   - `"admin"` wraps the admin SDK's `Query.onSnapshot` so the daemon reacts
+//     to writes the instant they land — across any daemon collection, not just
+//     the rules-exposed subset — with backoff re-subscribe on transient
+//     stream errors. See `firestoreAdminSubscription.ts`.
 //
 // **Capability split** — admin and client paths are isolated:
 //   - The `firebase-admin` SDK is loaded via a **dynamic `await import()`**
 //     inside the admin methods. The static import graph of this file does
-//     not reach `firebase-admin`, so a UI bundle that only ever calls
-//     `subscribe()` will not pull the admin SDK into the browser.
+//     not reach `firebase-admin`, so a UI bundle that only ever calls the
+//     client `subscribe()` will not pull the admin SDK into the browser.
 //   - The admin handle is **lazy-initialized** on first admin method call,
 //     not in the constructor. Constructing the adapter for UI-only use
-//     (subscribe path) does not initialize any admin state.
-//   - The `subscribe()` method is purely client-SDK based and is the only
-//     method UI consumers need.
+//     (client subscribe path) does not initialize any admin state.
 //
 // Test fakes inject both handles through `HostedFirestoreDbOptions` so the
 // real Firebase modules are never touched during unit tests.
 // ---------------------------------------------------------------------------
 
-// Minimal structural types — narrow enough that test fakes can implement
-// them, broad enough that the real SDKs satisfy them.
-
-interface AdminDocSnapshot {
-  exists: boolean;
-  data: () => unknown;
-}
-
-interface AdminDocRef {
-  get: () => Promise<AdminDocSnapshot>;
-  set: (data: unknown) => Promise<unknown>;
-  update: (patch: Record<string, unknown>) => Promise<unknown>;
-  delete: () => Promise<unknown>;
-}
-
-interface AdminQuerySnapshot {
-  docs: { id: string; data: () => unknown }[];
-}
-
-interface AdminQuery {
-  where: (field: string, op: "==", value: unknown) => AdminQuery;
-  get: () => Promise<AdminQuerySnapshot>;
-}
-
-interface AdminCollection extends AdminQuery {
-  doc: (id: string) => AdminDocRef;
-}
-
-interface AdminFirestoreLike {
-  collection: (name: string) => AdminCollection;
-}
+// Structural admin types live in `firestoreAdminTypes.ts` and are shared with
+// the admin subscription manager. The client-SDK shape is local to this file.
 
 interface ClientQuerySnapshot {
   docs: { id: string; data: () => unknown }[];
@@ -80,6 +56,13 @@ export interface ClientFirestoreModule {
   ) => () => void;
 }
 
+// Selects which SDK `subscribe()` listens through. The daemon constructs the
+// adapter with `Admin`; the UI uses the default `Client` path.
+export enum SubscriptionSource {
+  Admin = "admin",
+  Client = "client",
+}
+
 export interface HostedFirestoreDbOptions {
   // Inject for tests. When omitted, the admin SDK is dynamically imported
   // on first admin method call.
@@ -90,12 +73,21 @@ export interface HostedFirestoreDbOptions {
   clientFirestoreModule?: ClientFirestoreModule;
   // Inject for tests. Defaults to `getClientFirestore()`.
   clientFirestore?: unknown;
+  // Which SDK `subscribe()` listens through. Defaults to `Client` so existing
+  // UI consumers are unaffected; the daemon passes `Admin`.
+  subscriptionSource?: SubscriptionSource;
+  // Backoff tuning for the admin subscription manager. Injectable for tests.
+  adminSubscribeBaseBackoffMs?: number;
+  adminSubscribeMaxBackoffMs?: number;
 }
 
-// Subscribable collection names — UI-readable per `firestore.rules`. The
-// adapter throws on `subscribe()` calls for any other collection so an
+// Client-subscribable collection names — UI-readable per `firestore.rules`.
+// The client `subscribe()` path throws for any other collection so an
 // out-of-bounds UI subscription fails fast with a clear error rather than
-// surfacing as an opaque permission-denied from Firestore.
+// surfacing as an opaque permission-denied from Firestore. The admin path
+// has no such gate: the service-account credentials bypass rules, so the
+// daemon may subscribe to any collection (`commands`, derivation triggers,
+// etc.).
 const SUBSCRIBABLE_COLLECTIONS = new Set<string>([
   Collections.repositories.name,
   Collections.stepInstances.name,
@@ -151,8 +143,18 @@ export class HostedFirestoreDb implements Db {
   private readonly clientMod: ClientFirestoreModule;
   private readonly clientFs: unknown;
 
+  private readonly subscriptionSource: SubscriptionSource;
+  private readonly adminSubscriptions: AdminSubscriptionManager;
+
   constructor(opts: HostedFirestoreDbOptions) {
     this.injectedAdmin = opts.adminFirestore;
+    this.subscriptionSource =
+      opts.subscriptionSource ?? SubscriptionSource.Client;
+    this.adminSubscriptions = new AdminSubscriptionManager({
+      loadAdmin: () => this.getAdmin(),
+      baseBackoffMs: opts.adminSubscribeBaseBackoffMs,
+      maxBackoffMs: opts.adminSubscribeMaxBackoffMs,
+    });
     if (opts.clientFirestoreModule !== undefined) {
       this.clientMod = opts.clientFirestoreModule;
       this.clientFs = opts.clientFirestore ?? {};
@@ -270,6 +272,12 @@ export class HostedFirestoreDb implements Db {
     filter: Filter<T> | undefined,
     onChange: SubscriptionCallback<T>,
   ): Unsubscribe {
+    if (this.subscriptionSource === SubscriptionSource.Admin) {
+      // The daemon path: service-account credentials bypass rules, so any
+      // collection is subscribable. Listener lifecycle, backoff re-subscribe,
+      // and Zod decoding live in the subscription manager.
+      return this.adminSubscriptions.subscribe(coll, filter, onChange);
+    }
     if (!SUBSCRIBABLE_COLLECTIONS.has(coll.name)) {
       throw new Error(
         `Collection "${coll.name}" is not subscribable from the client SDK — firestore.rules denies client reads. Use the admin path (list/get) on the daemon side instead.`,
@@ -288,6 +296,13 @@ export class HostedFirestoreDb implements Db {
       // to the caller rather than silently returning malformed data.
       onChange(snap.docs.map((d) => coll.schema.parse(d.data())));
     });
+  }
+
+  // Detach every active admin subscription. The daemon calls this on graceful
+  // shutdown so no Firestore stream (or pending backoff retry) outlives the
+  // process. A no-op when no admin subscriptions are open.
+  closeSubscriptions(): void {
+    this.adminSubscriptions.closeAll();
   }
 }
 
