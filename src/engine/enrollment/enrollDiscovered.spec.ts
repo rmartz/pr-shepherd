@@ -83,6 +83,20 @@ describe("integrates with the discovery sweep output", () => {
 });
 
 describe("a PR that matches nothing is skipped", () => {
+  it("records an unknown-repo skip for a PR whose repo is not in the config", async () => {
+    const db = freshDb();
+    const config = makeConfig([
+      makeRepositoryConfig({ id: "known-owner/repo" }),
+    ]);
+    const resolve = resolverFor([makeWorkflowGraph()]);
+    const sweep = sweepOf(makeDiscoveredPr({ repo: "other-owner/repo" }));
+
+    const report = await enrollDiscovered(db, config, sweep, resolve);
+
+    expect(report.enrolled).toHaveLength(0);
+    expect(report.skipped[0]?.reason).toBe(SkipReason.UnknownRepo);
+  });
+
   it("records a no-match skip and enrolls no run", async () => {
     const db = freshDb();
     const config = makeConfig([

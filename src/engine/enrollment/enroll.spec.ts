@@ -127,3 +127,35 @@ describe("idempotency guard: a PR with an active run is not re-enrolled", () => 
     expect(security.runId).not.toBe(base.runId);
   });
 });
+
+describe("workflowDefinitions: one record per enrollment, not deduped", () => {
+  it("creates exactly one workflowDefinitions record per enrollment", async () => {
+    const db = freshDb();
+    const graph = makeWorkflowGraph({ id: "base-pr", version: 7 });
+
+    await enrollPr(db, makeDiscoveredPr({ number: 1 }), graph, {
+      newId: sequencedIds(),
+    });
+
+    const defs = await db.list(Collections.workflowDefinitions);
+    expect(defs).toHaveLength(1);
+    expect(defs[0]?.workflowId).toBe("base-pr");
+    expect(defs[0]?.version).toBe(7);
+  });
+
+  it("creates a second definition record when re-enrolling after a terminal run", async () => {
+    const db = freshDb();
+    const pr = makeDiscoveredPr({ number: 1 });
+    const graph = makeWorkflowGraph({ id: "base-pr", version: 7 });
+    const newId = sequencedIds();
+
+    const first = await enrollPr(db, pr, graph, { newId });
+    await db.update(Collections.workflowRuns, first.runId, {
+      status: RunStatus.Completed,
+    });
+    await enrollPr(db, pr, graph, { newId });
+
+    const defs = await db.list(Collections.workflowDefinitions);
+    expect(defs).toHaveLength(2);
+  });
+});
