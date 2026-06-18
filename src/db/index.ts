@@ -16,7 +16,10 @@ export type {
 export { Collections } from "./collections";
 export * from "./schemas";
 
-import { createHostedFirestoreDb } from "./adapters/hostedFirestore";
+import {
+  createHostedFirestoreDb,
+  SubscriptionSource,
+} from "./adapters/hostedFirestore";
 import { createInMemoryDb } from "./adapters/inMemory";
 import type { Db } from "./types";
 
@@ -67,7 +70,12 @@ export function createDb(config: DbConfig): Db {
   switch (config.adapter) {
     case DbAdapterKind.FirebaseHosted:
       clearEmulatorEnv();
-      return createHostedFirestoreDb();
+      // The daemon owns this factory; subscriptions go through the admin SDK
+      // (rules-bypassing, any collection). The UI subscribes via the client
+      // SDK directly (`src/lib/firebase/client`), not through `createDb`.
+      return createHostedFirestoreDb({
+        subscriptionSource: SubscriptionSource.Admin,
+      });
     case DbAdapterKind.InMemory:
       clearEmulatorEnv();
       return createInMemoryDb();
@@ -82,7 +90,9 @@ export function createDb(config: DbConfig): Db {
       const host =
         config.emulator?.firestoreHost ?? DEFAULT_EMULATOR_FIRESTORE_HOST;
       process.env["FIRESTORE_EMULATOR_HOST"] = host;
-      return createHostedFirestoreDb();
+      return createHostedFirestoreDb({
+        subscriptionSource: SubscriptionSource.Admin,
+      });
     }
     case DbAdapterKind.Leveldb:
       clearEmulatorEnv();
