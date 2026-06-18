@@ -1,6 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
 import { createInMemoryDb } from "./inMemory";
-import { createDb } from "../index";
+import { createDb, DbAdapterKind } from "../index";
 import { Collections } from "../collections";
 import type { Repository } from "../schemas";
 
@@ -222,13 +222,13 @@ describe("notify() snapshots the subscription list", () => {
 
 describe("createDb factory exhaustiveness", () => {
   it("returns the in-memory adapter for the in-memory kind", () => {
-    expect(createDb({ adapter: "in-memory" })).toBeDefined();
+    expect(createDb({ adapter: DbAdapterKind.InMemory })).toBeDefined();
   });
 
   it("throws a clear error for an unknown adapter value", () => {
     expect(() =>
       createDb({
-        adapter: "unknown-adapter" as unknown as "in-memory",
+        adapter: "unknown-adapter" as unknown as DbAdapterKind,
       }),
     ).toThrow(/Unknown db adapter/);
   });

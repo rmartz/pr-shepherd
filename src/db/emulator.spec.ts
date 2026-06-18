@@ -1,5 +1,5 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
-import { createDb } from "./index";
+import { createDb, DbAdapterKind } from "./index";
 
 // ---------------------------------------------------------------------------
 // Unit tests for the `firebase-emulator` adapter kind. The emulator path
@@ -52,7 +52,7 @@ describe("Config flag selects firebase-emulator and routes to the emulator", () 
 
   it("sets FIRESTORE_EMULATOR_HOST with the configured host when adapter is firebase-emulator", () => {
     const { message } = callCreateDbTolerant({
-      adapter: "firebase-emulator",
+      adapter: DbAdapterKind.FirebaseEmulator,
       emulator: { firestoreHost: "127.0.0.1:8080" },
     });
     // If construction threw, it must not be the old placeholder.
@@ -64,7 +64,9 @@ describe("Config flag selects firebase-emulator and routes to the emulator", () 
   });
 
   it("defaults to localhost:8080 when emulator host is not specified", () => {
-    const { message } = callCreateDbTolerant({ adapter: "firebase-emulator" });
+    const { message } = callCreateDbTolerant({
+      adapter: DbAdapterKind.FirebaseEmulator,
+    });
     if (message !== undefined) {
       expect(message).not.toMatch(/not yet implemented/);
     }
@@ -74,20 +76,20 @@ describe("Config flag selects firebase-emulator and routes to the emulator", () 
   it("clears FIRESTORE_EMULATOR_HOST when adapter is firebase-hosted", () => {
     // Simulate an earlier emulator construction having set the var.
     process.env["FIRESTORE_EMULATOR_HOST"] = "stale:9999";
-    callCreateDbTolerant({ adapter: "firebase-hosted" });
+    callCreateDbTolerant({ adapter: DbAdapterKind.FirebaseHosted });
     expect(process.env["FIRESTORE_EMULATOR_HOST"]).toBeUndefined();
   });
 
   it("clears FIRESTORE_EMULATOR_HOST when adapter is in-memory", () => {
     process.env["FIRESTORE_EMULATOR_HOST"] = "stale:9999";
-    createDb({ adapter: "in-memory" });
+    createDb({ adapter: DbAdapterKind.InMemory });
     expect(process.env["FIRESTORE_EMULATOR_HOST"]).toBeUndefined();
   });
 
   it("returns a Db with the same shape as the hosted adapter (same class)", () => {
     let db: ReturnType<typeof createDb> | undefined;
     try {
-      db = createDb({ adapter: "firebase-emulator" });
+      db = createDb({ adapter: DbAdapterKind.FirebaseEmulator });
     } catch (err) {
       // Construction may fail in environments without client Firebase
       // env vars — verify it isn't the old placeholder and exit the

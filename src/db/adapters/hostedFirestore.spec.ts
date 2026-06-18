@@ -3,7 +3,7 @@ import {
   createHostedFirestoreDb,
   type ClientFirestoreModule,
 } from "./hostedFirestore";
-import { createDb } from "../index";
+import { createDb, DbAdapterKind } from "../index";
 import { Collections } from "../collections";
 import { RunStatus, type Repository, type WorkflowRun } from "../schemas";
 
@@ -595,7 +595,7 @@ describe("createDb factory wires firebase-hosted to the new adapter", () => {
     // placeholder "not yet implemented" error from before #38.
     let caughtMessage: string | undefined = undefined;
     try {
-      createDb({ adapter: "firebase-hosted" });
+      createDb({ adapter: DbAdapterKind.FirebaseHosted });
     } catch (e) {
       caughtMessage = e instanceof Error ? e.message : JSON.stringify(e);
     }
