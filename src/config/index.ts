@@ -14,3 +14,10 @@ export {
   type RepositoryConfig,
 } from "./schema";
 export { DbAdapterKind } from "../db";
+export {
+  loadWorkflow,
+  WorkflowLoadError,
+  type RoutingRule,
+  type WorkflowGraph,
+  type WorkflowStep,
+} from "./workflowLoader";
