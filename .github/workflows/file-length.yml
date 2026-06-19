@@ -17,49 +17,9 @@ jobs:
 
       - name: Check changed file lengths
         run: |
-          # Hard cap = +100% of the recommended limit from CLAUDE.md (2× recommended).
-          # Source files: recommended 200 (+20% review push-back at ~240) → CI fails at 400+
-          # Test files:   recommended 300 (+20% review push-back at ~360) → CI fails at 600+
-          SOURCE_LIMIT=400
-          TEST_LIMIT=600
-
-          failed=0
-
-          while IFS= read -r file; do
-            # Skip deleted files
-            [ -f "$file" ] || continue
-
-            # Only check TypeScript source files
-            case "$file" in
-              *.ts|*.tsx) ;;
-              *) continue ;;
-            esac
-
-            # Determine limit by file type
-            case "$file" in
-              *.spec.ts|*.spec.tsx|*.test.ts|*.test.tsx|*-tests/*.ts|*-tests/*.tsx)
-                limit=$TEST_LIMIT
-                kind="test"
-                ;;
-              *)
-                limit=$SOURCE_LIMIT
-                kind="source"
-                ;;
-            esac
-
-            lines=$(wc -l < "$file")
-
-            if [ "$lines" -ge "$limit" ]; then
-              echo "::error file=$file,title=File too long::$file — $lines lines ($kind limit: $limit)"
-              failed=1
-            fi
-          done < <(git diff --name-only "origin/${{ github.base_ref }}...HEAD")
-
-          if [ "$failed" -ne 0 ]; then
-            echo ""
-            echo "One or more files exceed the hard line-count cap (2× the recommended limit)."
-            echo "  Source files: recommended 200, CI fails at ${SOURCE_LIMIT}+"
-            echo "  Test files:   recommended 300, CI fails at ${TEST_LIMIT}+"
-            echo "Split large files by logical concern before merging."
-            exit 1
-          fi
+          # The hard-cap logic lives in scripts/check-file-length.mjs so this CI
+          # job and the .husky/pre-commit guard share one implementation and
+          # cannot drift. Compare against the merge-base so an advancing base
+          # branch never skews the changed-file list.
+          base=$(git merge-base "origin/${{ github.base_ref }}" HEAD)
+          node scripts/check-file-length.mjs --base "$base"
