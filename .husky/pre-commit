@@ -1,2 +1,5 @@
+# File-length hard cap on staged TS files — same check CI enforces, caught at
+# commit time. `git commit --no-verify` bypasses; CI remains the backstop.
+node scripts/check-file-length.mjs --staged
 pnpm exec lint-staged
 pnpm run secrets-check
