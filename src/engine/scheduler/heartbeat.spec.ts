@@ -255,6 +255,9 @@ describe("monitorHeartbeats", () => {
         filter: Filter<T> | undefined,
         onChange: SubscriptionCallback<T>,
       ) => baseDb.subscribe(coll, filter, onChange),
+      closeSubscriptions: () => {
+        baseDb.closeSubscriptions();
+      },
     };
 
     const failed = await monitorHeartbeats(racingDb, {
