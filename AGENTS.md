@@ -92,6 +92,9 @@ Public (non-secret) environment config lives in `deployment/{env}.yml` and is va
 ## Documentation
 
 - Keep documentation in sync with the code — outdated docs are worse than no docs.
+- **`docs/` follows the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)**: one concept per markdown file with YAML frontmatter, cross-linked into a graph and listed in [docs/index.md](docs/index.md). These are pull/retrieval reference pages — **not** a place for always-in-context policy (that stays in this file / `CLAUDE.md`) or the top-level overview (`ARCHITECTURE.md`).
+  - Every `docs/` page must start with frontmatter carrying a `type` from the vocabulary in [docs/index.md](docs/index.md) (`Subsystem`, `StepExecutor`, `Adapter`, `Workflow`, `Design`, `Reference`, `Index`, `Log`); `title`, `description`, `resource`, and `tags` are recommended. `scripts/check-docs-okf.mjs` validates this.
+  - When you add a new subsystem, step executor, adapter, or workflow, add a corresponding `docs/` page and link it from `docs/index.md`.
 
 ## React / Next.js Standards
 
