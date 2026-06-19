@@ -18,3 +18,10 @@ config.yaml
 workflows/*.local.yaml
 # Daemon runtime data (run-step logs, optional LevelDB adapter store)
 data/
+
+# Track the shared project Claude settings (PostToolUse hooks, etc.) even
+# though the global ~/.gitignore ignores .claude/. Keep everything else under
+# .claude/ ignored — notably settings.local.json (per-user local overrides).
+!.claude/
+.claude/*
+!.claude/settings.json
