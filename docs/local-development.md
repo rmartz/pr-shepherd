@@ -1,3 +1,10 @@
+---
+type: Reference
+title: Local Development
+description: Run the PR Shepherd daemon against a local Firebase Emulator instead of managed Firestore.
+tags: [setup, firebase, emulator]
+---
+
 # Local Development
 
 This page covers running the PR Shepherd daemon against a local Firebase Emulator instead of a managed Firestore project. Use this for end-to-end testing without burning a Firebase quota or touching production data.
