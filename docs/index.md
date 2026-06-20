@@ -34,8 +34,10 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [claude_skill](steps/claude-skill.md) — runs a Claude skill in a capability-isolated subprocess.
 - [evaluate_gates](steps/evaluate-gates.md) — reads the derived state vector, runs the gate decision, emits `{ action, blockingGate }` for routing.
 
+### Design
+
+- [PR Lifecycle — Goal-State Design](design/pr-lifecycle.md) — the derive → decide → execute lifecycle, state vector, gate model, and orchestration/resilience target state.
+
 ### Reference
 
 - [Local Development](local-development.md) — running the daemon against the Firebase Emulator.
-
-> Design pages (e.g. the PR-lifecycle goal-state doc) are added as the corresponding work lands.
