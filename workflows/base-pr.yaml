@@ -154,7 +154,7 @@ steps:
     stepType: github_api
     input:
       actions:
-        - type: authorize_ci
+        - type: rerun_ci
           params:
             repo: "{{ context.repo }}"
             pr: "{{ context.prNumber }}"

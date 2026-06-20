@@ -188,6 +188,24 @@ describe("base-pr re-derives after each mutating or wait step", () => {
   });
 });
 
+describe("base-pr CI mutation steps dispatch the correct github_api action type", () => {
+  it("authorize_ci step dispatches type: authorize_ci", () => {
+    const graph = loadWorkflow(source);
+    const step = stepById(graph.steps, "authorize_ci");
+    const actions = step.input["actions"] as { type: string }[];
+
+    expect(actions[0]?.type).toBe("authorize_ci");
+  });
+
+  it("rerun_ci step dispatches type: rerun_ci (not authorize_ci)", () => {
+    const graph = loadWorkflow(source);
+    const step = stepById(graph.steps, "rerun_ci");
+    const actions = step.input["actions"] as { type: string }[];
+
+    expect(actions[0]?.type).toBe("rerun_ci");
+  });
+});
+
 describe("base-pr isolates GitHub mutation behind github_api steps", () => {
   it("pairs each claude_skill step with a downstream github_api step", () => {
     const graph = loadWorkflow(source);
