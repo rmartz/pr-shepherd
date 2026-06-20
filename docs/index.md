@@ -32,6 +32,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Step executors
 
 - [claude_skill](steps/claude-skill.md) — runs a Claude skill in a capability-isolated subprocess.
+- [evaluate_gates](steps/evaluate-gates.md) — reads the derived state vector, runs the gate decision, emits `{ action, blockingGate }` for routing.
 
 ### Reference
 
