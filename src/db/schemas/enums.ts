@@ -23,6 +23,7 @@ export enum StepStatus {
 export enum StepType {
   ClaudeSkill = "claude_skill",
   Decision = "decision",
+  DerivePrState = "derive_pr_state",
   Fork = "fork",
   GithubApi = "github_api",
   WaitAuthorPush = "wait_author_push",

@@ -12,11 +12,13 @@ import { StepType } from "@/db/schemas";
 //
 //   - SYSTEM_CONCURRENCY_MAX     — global cap on active `claude_skill` steps
 //                                  (protects local Claude CLI throughput).
-//   - GITHUB_API_CONCURRENCY_MAX — global cap on active `github_api` steps
+//   - GITHUB_API_CONCURRENCY_MAX — global cap on active GitHub-reading/writing
+//                                  steps (`github_api`, `derive_pr_state`)
 //                                  (protects against GitHub 429 / secondary
 //                                  rate-limit storms across all repos).
 //   - repo.concurrencyMax        — per-repo cap on active steps that count
-//                                  against the repo (claude_skill, github_api,
+//                                  against the repo (claude_skill,
+//                                  derive_pr_state, github_api,
 //                                  wait_author_push, wait_external).
 //
 // Cost-free step types (`decision`, `fork`) are admitted unconditionally —
@@ -84,6 +86,7 @@ export type AdmissionDecision =
 export function countsAgainstRepo(stepType: StepType): boolean {
   switch (stepType) {
     case StepType.ClaudeSkill:
+    case StepType.DerivePrState:
     case StepType.GithubApi:
     case StepType.WaitAuthorPush:
     case StepType.WaitExternal:
@@ -143,7 +146,11 @@ export function canAdmitStep(
         return { admit: false, reason: AdmissionRejectReason.SystemClaudeFull };
       }
       break;
+    case StepType.DerivePrState:
     case StepType.GithubApi:
+      // Both perform a GitHub read/write and so draw from the shared
+      // GitHub-API budget that protects against 429 / secondary-rate-limit
+      // storms across all repos.
       if (counts.systemGithubApi >= config.githubApiMax) {
         return {
           admit: false,
