@@ -31,6 +31,18 @@ export enum CopilotState {
   Resolved = "resolved",
 }
 
+// The Dependabot rebase marker, derived from the PR body. Per the global
+// CLAUDE.md, the "Dependabot is rebasing this PR" line is authoritative and
+// current — a rebase is in progress, so the daemon must NOT post another
+// `@dependabot rebase`. "Dependabot rebase failed" is the terminal failure
+// state, where a `@dependabot recreate` is usually the right follow-up. None
+// means no marker is present (no rebase running).
+export enum DependabotRebaseState {
+  Failed = "failed",
+  InProgress = "in_progress",
+  None = "none",
+}
+
 export enum HoldState {
   BlockedOnIssue = "blocked_on_issue",
   DoNotMerge = "do_not_merge",
@@ -72,6 +84,7 @@ export interface PrStateVector {
   ci: CIState;
   conflict: MergeConflict;
   copilot: CopilotState;
+  dependabotRebase: DependabotRebaseState;
   hold: HoldState;
   review: ReviewState;
   threads: ThreadState;

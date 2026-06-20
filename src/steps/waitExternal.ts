@@ -25,10 +25,26 @@ import type { StepExecutor, ExecutorResult } from "@/engine/runner/types";
 //
 // metrics.externalWaitMs records wall-clock time from the moment the step
 // entered waiting until the subprocess completed.
+//
+// The `fix_pr` kind waits on a spawned child / fix PR (created by the `fork`
+// executor, #65, whose child run carries the fix PR's number). A fix PR
+// "resolves" when its CI run completes, so this kind wraps the same
+// wait-for-ci.py script keyed off the fix PR's number — the workflow passes
+// that number as `pr` (e.g. from the fork step's child run). This reuses the
+// existing subprocess mechanism rather than inventing a new transport; the
+// only difference from `ci` is intent and the identifier it keys off.
 // ---------------------------------------------------------------------------
 
+// Kept in alphabetical order to minimize merge conflicts. String values match
+// the serialized workflow-YAML schema.
+export enum WaitExternalKind {
+  Ci = "ci",
+  CopilotReview = "copilot_review",
+  FixPr = "fix_pr",
+}
+
 export const WaitExternalInputSchema = z.object({
-  kind: z.enum(["ci", "copilot_review"]),
+  kind: z.enum(WaitExternalKind),
   pr: z.number().int().nonnegative(),
   args: z.array(z.string()).optional(),
 });
@@ -42,11 +58,14 @@ function exitReason(code: number | null): "timeout" | "error" {
   return code === 1 ? "timeout" : "error";
 }
 
-function scriptPath(kind: "ci" | "copilot_review"): string {
+function scriptPath(kind: WaitExternalKind): string {
   const base = `${homedir()}/.claude/scripts`;
-  return kind === "ci"
-    ? `${base}/wait-for-ci.py`
-    : `${base}/wait-for-copilot-review.py`;
+  // `fix_pr` waits on the spawned child/fix PR's CI, so it reuses the CI wait
+  // script keyed off the fix PR number.
+  if (kind === WaitExternalKind.CopilotReview) {
+    return `${base}/wait-for-copilot-review.py`;
+  }
+  return `${base}/wait-for-ci.py`;
 }
 
 // Minimum ChildProcess surface required by the executor.

@@ -13,6 +13,7 @@ import {
   runWaitExternal,
   createWaitExternalExecutor,
   WaitExternalInputSchema,
+  WaitExternalKind,
   type WaitProcess,
   type SpawnFn,
 } from "./waitExternal";
@@ -71,6 +72,22 @@ function makeFakeProcess(): FakeProcess {
 
 function makeSpawnFn(proc: FakeProcess): SpawnFn {
   return () => proc;
+}
+
+// Spawn fn that records the script path + args each call received, so a test
+// can assert which wait-for-*.py the kind resolved to and the PR it keyed off.
+function makeCapturingSpawnFn(proc: FakeProcess): {
+  spawn: SpawnFn;
+  calls: { cmd: string; args: string[] }[];
+} {
+  const calls: { cmd: string; args: string[] }[] = [];
+  return {
+    spawn: (cmd, args) => {
+      calls.push({ cmd, args });
+      return proc;
+    },
+    calls,
+  };
 }
 
 // --- DB seed helpers -------------------------------------------------------
@@ -174,7 +191,7 @@ describe("runWaitExternal ci-wait happy path: subprocess exits 0", () => {
   it("resolves with passed: true when the subprocess exits 0", async () => {
     const proc = makeFakeProcess();
     const resultPromise = runWaitExternal(
-      { kind: "ci", pr: 42 },
+      { kind: WaitExternalKind.Ci, pr: 42 },
       { spawn: makeSpawnFn(proc) },
     );
     proc.emitClose(0);
@@ -191,12 +208,50 @@ describe("runWaitExternal copilot-review-wait happy path: subprocess exits 0", (
   it("resolves with passed: true when the subprocess exits 0", async () => {
     const proc = makeFakeProcess();
     const resultPromise = runWaitExternal(
-      { kind: "copilot_review", pr: 7 },
+      { kind: WaitExternalKind.CopilotReview, pr: 7 },
       { spawn: makeSpawnFn(proc) },
     );
     proc.emitClose(0);
     const result = await resultPromise;
     expect(result.passed).toBe(true);
+  });
+});
+
+// ---------------------------------------------------------------------------
+// runWaitExternal — fix_pr kind (waits on a spawned child / fix PR)
+// ---------------------------------------------------------------------------
+
+describe("runWaitExternal fix-pr-wait happy path: subprocess exits 0", () => {
+  it("resolves with passed: true when the fix PR's wait subprocess exits 0", async () => {
+    const proc = makeFakeProcess();
+    const resultPromise = runWaitExternal(
+      { kind: WaitExternalKind.FixPr, pr: 314 },
+      { spawn: makeSpawnFn(proc) },
+    );
+    proc.emitClose(0);
+    const result = await resultPromise;
+    expect(result.passed).toBe(true);
+  });
+
+  it("waits via wait-for-ci.py keyed off the fix PR number", async () => {
+    const proc = makeFakeProcess();
+    const { spawn, calls } = makeCapturingSpawnFn(proc);
+    const resultPromise = runWaitExternal(
+      { kind: WaitExternalKind.FixPr, pr: 314 },
+      { spawn },
+    );
+    proc.emitClose(0);
+    await resultPromise;
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.cmd).toContain("wait-for-ci.py");
+    expect(calls[0]?.args[0]).toBe("314");
+  });
+});
+
+describe("WaitExternalInputSchema accepts the fix_pr kind", () => {
+  it("parses fix_pr as a valid kind", () => {
+    const parsed = WaitExternalInputSchema.parse({ kind: "fix_pr", pr: 9 });
+    expect(parsed.kind).toBe(WaitExternalKind.FixPr);
   });
 });
 
@@ -208,7 +263,7 @@ describe("runWaitExternal timeout exit captured as failed with reason: timeout",
   it("resolves with passed: false and reason: timeout when subprocess exits 1", async () => {
     const proc = makeFakeProcess();
     const resultPromise = runWaitExternal(
-      { kind: "ci", pr: 42 },
+      { kind: WaitExternalKind.Ci, pr: 42 },
       { spawn: makeSpawnFn(proc) },
     );
     proc.emitClose(1);
@@ -222,7 +277,7 @@ describe("runWaitExternal timeout exit captured as failed with reason: timeout",
   it("resolves with passed: false and reason: error for non-zero non-timeout exit code", async () => {
     const proc = makeFakeProcess();
     const resultPromise = runWaitExternal(
-      { kind: "ci", pr: 42 },
+      { kind: WaitExternalKind.Ci, pr: 42 },
       { spawn: makeSpawnFn(proc) },
     );
     proc.emitClose(2);
@@ -239,7 +294,7 @@ describe("runWaitExternal spawn error path", () => {
     const proc = makeFakeProcess();
     const controller = new AbortController();
     const resultPromise = runWaitExternal(
-      { kind: "ci", pr: 42 },
+      { kind: WaitExternalKind.Ci, pr: 42 },
       { spawn: makeSpawnFn(proc), signal: controller.signal },
     );
     proc.emitError(new Error("spawn failed"));
@@ -267,7 +322,7 @@ describe("runWaitExternal cancellation sends SIGTERM then SIGKILL after grace pe
     };
 
     const resultPromise = runWaitExternal(
-      { kind: "ci", pr: 42 },
+      { kind: WaitExternalKind.Ci, pr: 42 },
       {
         spawn: makeSpawnFn(proc),
         signal: controller.signal,
@@ -296,7 +351,7 @@ describe("runWaitExternal cancellation sends SIGTERM then SIGKILL after grace pe
     controller.abort();
 
     const resultPromise = runWaitExternal(
-      { kind: "ci", pr: 42 },
+      { kind: WaitExternalKind.Ci, pr: 42 },
       { spawn: makeSpawnFn(proc), signal: controller.signal },
     );
 

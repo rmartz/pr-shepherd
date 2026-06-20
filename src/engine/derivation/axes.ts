@@ -4,6 +4,7 @@ import { MergeConflict, ThreadState, UATState } from "./state-vector";
 import { deriveCi } from "./ci-axis";
 import { deriveReview } from "./review-axis";
 import { deriveCopilot } from "./copilot-axis";
+import { deriveDependabotRebase } from "./dependabot-rebase-axis";
 import { deriveActivity, deriveHold } from "./hold-activity-axis";
 
 // ---------------------------------------------------------------------------
@@ -64,6 +65,7 @@ export function derivePrState(
     ci: deriveCi(snapshot),
     conflict: deriveConflict(snapshot),
     copilot: deriveCopilot(snapshot),
+    dependabotRebase: deriveDependabotRebase(snapshot),
     hold: deriveHold(snapshot, context),
     review: deriveReview(snapshot),
     threads: deriveThreads(snapshot),

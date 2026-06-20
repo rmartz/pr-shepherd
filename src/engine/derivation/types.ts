@@ -64,6 +64,11 @@ export interface PrSnapshot {
   repo: string;
   number: number;
   title: string;
+  // The PR-level description body. Carries the Dependabot rebase marker
+  // ("Dependabot is rebasing this PR" / "Dependabot rebase failed"), which the
+  // dependabot-rebase axis interprets. Distinct from the per-review/comment
+  // body fields above — this is the pull request's own description.
+  body: string;
   isDraft: boolean;
   // Raw GitHub `mergeable` value ("MERGEABLE" | "CONFLICTING" | "UNKNOWN");
   // passed through verbatim so derivation owns the CLEAN/CONFLICTING/UNKNOWN

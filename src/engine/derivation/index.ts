@@ -20,6 +20,7 @@ export {
   Activity,
   CIState,
   CopilotState,
+  DependabotRebaseState,
   HoldState,
   MergeConflict,
   ReviewState,
