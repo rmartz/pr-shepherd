@@ -35,6 +35,10 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [claude_skill](steps/claude-skill.md) — runs a Claude skill in a capability-isolated subprocess.
 - [evaluate_gates](steps/evaluate-gates.md) — reads the derived state vector, runs the gate decision, emits `{ action, blockingGate }` for routing.
 
+### Workflows
+
+- [base-pr](workflows/base-pr.md) — the central PR lifecycle: derive → gates → {review / fix / merge / wait\_\*}, re-deriving every tick.
+
 ### Design
 
 - [PR Lifecycle — Goal-State Design](design/pr-lifecycle.md) — the derive → decide → execute lifecycle, state vector, gate model, and orchestration/resilience target state.
