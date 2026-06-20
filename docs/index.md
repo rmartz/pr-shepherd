@@ -27,6 +27,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Subsystems
 
 - [PR State Derivation](subsystems/pr-state-derivation.md) — one GitHub read → 8 orthogonal state axes.
+- [Gate Model](subsystems/gate-model.md) — the total decision: a state vector walks an ordered gate table to one action.
 
 ### Step executors
 
