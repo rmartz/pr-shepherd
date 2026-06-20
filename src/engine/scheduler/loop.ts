@@ -164,6 +164,7 @@ function incrementCounts(
     case StepType.ClaudeSkill:
       counts.systemClaude += 1;
       break;
+    case StepType.DerivePrState:
     case StepType.GithubApi:
       counts.systemGithubApi += 1;
       break;
