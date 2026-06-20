@@ -1,3 +1,6 @@
+# Block staged merge-conflict markers first — before lint-staged's prettier can
+# reflow and corrupt them. `--no-verify` or ALLOW_CONFLICT_MARKERS=1 bypasses.
+node scripts/check-conflict-markers.mjs --staged
 # File-length hard cap on staged TS files — same check CI enforces, caught at
 # commit time. `git commit --no-verify` bypasses; CI remains the backstop.
 node scripts/check-file-length.mjs --staged
