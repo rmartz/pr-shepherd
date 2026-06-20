@@ -38,9 +38,20 @@ Two data-only `DecideOptions` flags relax gates: `copilotUnavailable` satisfies 
 
 The decision is **provably total**: every reachable axis combination maps to exactly one action and never throws or falls through. Silent dead-zones — a state combination that matches no rule, stalling a PR invisibly — are the bug class this design exists to eliminate. `gates-tests/totality.spec.ts` enumerates the full cartesian product of all axis values (across every `DecideOptions` combination) and asserts a defined action for each.
 
+## Merge-candidate arbitration
+
+`decide` marks **every** merge-ready PR with `Action.Merge`, but merges are globally serialized (design doc §6; [#104](https://github.com/rmartz/pr-shepherd/issues/104)) — only one PR may merge per pass. `selectMergeCandidate(candidates)` is the pure tie-break that picks that single winner, or returns `undefined` when no candidate is merge-eligible.
+
+It is the same shape as `decide`: pure (no I/O, no clock reads), total, and unit-testable. Each `Candidate` is the minimal projection arbitration reads — `{ prNumber, action, priority, changedFiles, createdAt }`. The ordering is:
+
+1. **Eligibility** — only candidates whose `action` is `Action.Merge` are considered.
+2. **Priority class** (`MergePriority`, ranked by `MERGE_PRIORITY_RANK`) — `Hotfix` → `DependabotFix` → `Normal` → `Dependabot`. A hotfix unblocks a broken `main`; a Dependabot-fix unblocks the Dependabot PR it repairs, so both jump ahead of ordinary PRs (Coordinator spec §3).
+3. **Most files changed** — within a class, the largest PR merges first to clear the most blocking surface area.
+4. **Oldest `createdAt`**, then **lowest `prNumber`** — a total tie-break so the result never depends on input ordering.
+
 ## Public API
 
-Exported from `src/engine/gates` (`index.ts`): `decide`, the `Action` and `Gate` enums, and the `GateDecision` / `DecideOptions` types.
+Exported from `src/engine/gates` (`index.ts`): `decide`, the `Action` and `Gate` enums, the `GateDecision` / `DecideOptions` types, and the arbitration surface — `selectMergeCandidate`, the `MergePriority` enum, and the `Candidate` type.
 
 ## Related
 
