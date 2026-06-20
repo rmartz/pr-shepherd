@@ -1,3 +1,10 @@
+---
+type: Design
+title: PR Lifecycle — Goal-State Design
+description: Target architecture for the per-PR derive → decide → execute lifecycle.
+tags: [pr-lifecycle, derivation, gates, design]
+---
+
 # PR Lifecycle — Goal-State Design
 
 > **Status**: design / target architecture. Tracked by **[Epic 10 (#92)](https://github.com/rmartz/pr-shepherd/issues/92)**, **[Epic 11 (#93)](https://github.com/rmartz/pr-shepherd/issues/93)**, and **[Epic 12 (#94)](https://github.com/rmartz/pr-shepherd/issues/94)**. Builds on the [vision document (#1)](https://github.com/rmartz/pr-shepherd/issues/1) and the engine described in [ARCHITECTURE.md](../../ARCHITECTURE.md).

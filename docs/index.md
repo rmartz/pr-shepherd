@@ -27,14 +27,18 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Subsystems
 
 - [PR State Derivation](subsystems/pr-state-derivation.md) — one GitHub read → 8 orthogonal state axes.
+- [Gate Model](subsystems/gate-model.md) — the total decision: a state vector walks an ordered gate table to one action.
+- [Atomic-Task Guards](subsystems/atomic-task-guards.md) — pure cross-cutting guards (one-shot rerun, settle window, idempotency keys, verdict-label heal) that make atomic tasks safe to re-run.
 
 ### Step executors
 
 - [claude_skill](steps/claude-skill.md) — runs a Claude skill in a capability-isolated subprocess.
-- [derive_pr_state](steps/derive-pr-state.md) — fetches the PR snapshot, derives the 8-axis state vector into `context.state`.
+- [evaluate_gates](steps/evaluate-gates.md) — reads the derived state vector, runs the gate decision, emits `{ action, blockingGate }` for routing.
+
+### Design
+
+- [PR Lifecycle — Goal-State Design](design/pr-lifecycle.md) — the derive → decide → execute lifecycle, state vector, gate model, and orchestration/resilience target state.
 
 ### Reference
 
 - [Local Development](local-development.md) — running the daemon against the Firebase Emulator.
-
-> Design pages (e.g. the PR-lifecycle goal-state doc) are added as the corresponding work lands.
