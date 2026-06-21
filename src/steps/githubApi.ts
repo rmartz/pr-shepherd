@@ -35,6 +35,7 @@ export enum GithubActionType {
   PostComment = "post_comment",
   PostInlineComment = "post_inline_comment",
   PostReview = "post_review",
+  RebaseDependabot = "rebase_dependabot",
   RemoveLabel = "remove_label",
   RequestSquashMerge = "request_squash_merge",
   ResolveThread = "resolve_thread",
@@ -82,6 +83,19 @@ const PostReviewSchema = z.object({
   }),
 });
 
+// Posts `@dependabot rebase`. `rebaseInProgress` carries the derived rebase
+// marker (`context.state.dependabotRebase === "in_progress"`) so the guard
+// rides along with the action — `post_comment` would strip it. When true, the
+// executor no-ops instead of posting a redundant command while a rebase is
+// already running (the marker is authoritative and current). Defaults to
+// false so an action authored without the guard still posts.
+const RebaseDependabotSchema = z.object({
+  type: z.literal(GithubActionType.RebaseDependabot),
+  params: RepoPrParams.extend({
+    rebaseInProgress: z.boolean().default(false),
+  }),
+});
+
 const RemoveLabelSchema = z.object({
   type: z.literal(GithubActionType.RemoveLabel),
   params: RepoPrParams.extend({ label: z.string().min(1) }),
@@ -108,6 +122,7 @@ export const GithubActionSchema = z.discriminatedUnion("type", [
   PostCommentSchema,
   PostInlineCommentSchema,
   PostReviewSchema,
+  RebaseDependabotSchema,
   RemoveLabelSchema,
   RequestSquashMergeSchema,
   ResolveThreadSchema,
@@ -216,6 +231,25 @@ async function runOneAction(
   sleep: (ms: number) => Promise<void>,
   retry: RetryConfig,
 ): Promise<GithubActionResult> {
+  // Guard: a `rebase_dependabot` action no-ops when a rebase is already in
+  // progress. The marker ("Dependabot is rebasing this PR") is authoritative
+  // and current, so posting another `@dependabot rebase` would be a redundant
+  // command. We short-circuit to `ok` WITHOUT touching the transport — no
+  // GitHub mutation happens — and flag `skipped` so downstream routing can
+  // tell the rebase was guarded rather than newly requested.
+  if (
+    action.type === GithubActionType.RebaseDependabot &&
+    action.params.rebaseInProgress
+  ) {
+    return {
+      index,
+      actionType: action.type,
+      outcome: "ok",
+      data: { skipped: true, reason: "rebase already in progress" },
+      attempts: 0,
+    };
+  }
+
   let attempts = 0;
   let lastError: string | undefined;
 

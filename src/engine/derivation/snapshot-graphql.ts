@@ -11,6 +11,7 @@ export const SNAPSHOT_QUERY = `query PrSnapshot($owner: String!, $name: String!,
     pullRequest(number: $number) {
       number
       title
+      body
       isDraft
       mergeable
       baseRefName
@@ -87,6 +88,7 @@ export interface GraphqlResponse {
     pullRequest?: {
       number?: number;
       title?: string;
+      body?: string;
       isDraft?: boolean;
       mergeable?: string;
       baseRefName?: string;

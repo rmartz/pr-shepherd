@@ -1,6 +1,10 @@
 import { describe, expect, it } from "vitest";
 
-import { Activity, type PrStateVector } from "../../derivation/state-vector";
+import {
+  Activity,
+  DependabotRebaseState,
+  type PrStateVector,
+} from "../../derivation/state-vector";
 import { Action, type DecideOptions, decide } from "../index";
 import { AXIS_VALUES } from "./fixtures";
 
@@ -15,11 +19,16 @@ function* allStateVectors(): Generator<PrStateVector> {
             for (const threads of AXIS_VALUES.threads) {
               for (const uat of AXIS_VALUES.uat) {
                 for (const activity of AXIS_VALUES.activity) {
+                  // dependabotRebase, like activity, is not a gate input —
+                  // `decide()` never reads it (it feeds the rebase_dependabot
+                  // action guard, not the merge gates). A fixed value keeps the
+                  // product focused on the axes decide() actually consumes.
                   yield {
                     activity,
                     ci,
                     conflict,
                     copilot,
+                    dependabotRebase: DependabotRebaseState.None,
                     hold,
                     review,
                     threads,
@@ -71,6 +80,7 @@ describe("decide() is total over the full axis product", () => {
                     ci,
                     conflict,
                     copilot,
+                    dependabotRebase: DependabotRebaseState.None,
                     hold,
                     review,
                     threads,

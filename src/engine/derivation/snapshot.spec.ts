@@ -22,6 +22,7 @@ function graphqlResponse(): unknown {
       pullRequest: {
         number: 7,
         title: "Add a thing",
+        body: "Dependabot is rebasing this PR",
         isDraft: false,
         mergeable: "MERGEABLE",
         baseRefName: "main",
@@ -120,6 +121,7 @@ describe("fetchPrSnapshot returns a typed snapshot from one GraphQL read + pagin
     const snap = await fetchPrSnapshot(transport, TARGET);
 
     expect(snap.number).toBe(7);
+    expect(snap.body).toBe("Dependabot is rebasing this PR");
     expect(snap.headOid).toBe("oid-head");
     expect(snap.mergeable).toBe("MERGEABLE");
     expect(snap.author).toBe("rmartz");

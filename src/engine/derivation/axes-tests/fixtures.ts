@@ -19,6 +19,7 @@ export function makePrSnapshot(
     repo: "pr-shepherd",
     number: 7,
     title: "Add a thing",
+    body: "",
     isDraft: false,
     mergeable: "MERGEABLE",
     baseRefName: "main",

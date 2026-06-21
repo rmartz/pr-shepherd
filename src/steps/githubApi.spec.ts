@@ -269,6 +269,68 @@ describe("Non-rate-limit failure of one sub-action records the failure and conti
   });
 });
 
+describe("rebase_dependabot no-ops when a rebase is already in progress", () => {
+  it("skips the transport and returns ok with skipped:true when rebaseInProgress is true", async () => {
+    const { transport, calls } = makeFakeTransport([]);
+    const out = await runGithubApi(
+      {
+        actions: [
+          {
+            type: GithubActionType.RebaseDependabot,
+            params: { repo: "owner/repo", pr: 5, rebaseInProgress: true },
+          },
+        ],
+      },
+      { transport, sleep: noSleep },
+    );
+    // No transport call at all — the guard short-circuits before any mutation.
+    expect(calls).toHaveLength(0);
+    expect(out.results[0]?.outcome).toBe("ok");
+    expect(out.results[0]?.data).toEqual({
+      skipped: true,
+      reason: "rebase already in progress",
+    });
+    expect(out.partial_failure).toBe(false);
+  });
+
+  it("posts the rebase command through the transport when rebaseInProgress is false", async () => {
+    const { transport, calls } = makeFakeTransport([
+      { result: { kind: "ok", data: { commented: true } } },
+    ]);
+    const out = await runGithubApi(
+      {
+        actions: [
+          {
+            type: GithubActionType.RebaseDependabot,
+            params: { repo: "owner/repo", pr: 5, rebaseInProgress: false },
+          },
+        ],
+      },
+      { transport, sleep: noSleep },
+    );
+    expect(calls).toHaveLength(1);
+    expect(calls[0]?.type).toBe(GithubActionType.RebaseDependabot);
+    expect(out.results[0]?.outcome).toBe("ok");
+    expect(out.results[0]?.data).toEqual({ commented: true });
+  });
+
+  it("defaults rebaseInProgress to false so an unguarded action still posts", () => {
+    const parsed = GithubApiInputSchema.parse({
+      actions: [
+        {
+          type: "rebase_dependabot",
+          params: { repo: "owner/repo", pr: 5 },
+        },
+      ],
+    });
+    const action = parsed.actions[0];
+    expect(action?.type).toBe(GithubActionType.RebaseDependabot);
+    expect(
+      (action?.params as { rebaseInProgress: boolean }).rebaseInProgress,
+    ).toBe(false);
+  });
+});
+
 describe("Per-action results include the action type and index for downstream routing", () => {
   it("records each result with its original action type and index", async () => {
     const a1 = makeAction({

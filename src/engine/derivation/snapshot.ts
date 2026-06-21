@@ -241,6 +241,7 @@ function mapSnapshot(
     repo: target.repo,
     number: pr?.number ?? target.prNumber,
     title: pr?.title ?? "",
+    body: pr?.body ?? "",
     isDraft: pr?.isDraft ?? false,
     mergeable: pr?.mergeable ?? "UNKNOWN",
     baseRefName: pr?.baseRefName ?? "",
