@@ -50,3 +50,4 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Reference
 
 - [Local Development](local-development.md) — running the daemon against the Firebase Emulator.
+- [shepherd CLI](reference/shepherd-cli.md) — the headless daemon's commander entrypoint: start, status, force-retry, inspect.

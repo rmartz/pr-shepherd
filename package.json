@@ -4,6 +4,9 @@
   "description": "Locally-hosted daemon that automates the full PR review → fix → merge lifecycle across repositories using Claude, backed by a reactive web UI for monitoring workflow runs.",
   "private": true,
   "type": "module",
+  "bin": {
+    "shepherd": "src/cli/shepherd.ts"
+  },
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "next dev",
@@ -33,6 +36,7 @@
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
+    "commander": "^15.0.0",
     "firebase": "^12.15.0",
     "firebase-admin": "^14.0.0",
     "lucide-react": "^1.21.0",
@@ -67,6 +71,7 @@
     "shadcn": "^4.11.0",
     "storybook": "^10.4.6",
     "tailwindcss": "^4",
+    "tsx": "^4.22.4",
     "typescript": "^6",
     "typescript-eslint": "^8.61.1",
     "vercel-deploy-scripts": "github:rmartz/vercel-deploy-scripts#v2.3.3",
