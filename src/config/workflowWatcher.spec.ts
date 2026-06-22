@@ -84,6 +84,35 @@ function immediateTimer(fn: () => void): ReturnType<typeof setTimeout> {
   return 0 as unknown as ReturnType<typeof setTimeout>;
 }
 
+// A deferred timer seam: captures scheduled callbacks without running them so
+// the test controls exactly when they fire. Supports cancellation so the
+// debounce cancel-and-reschedule path is exercised.
+function makeDeferredTimer(): {
+  setTimer: (fn: () => void, ms: number) => ReturnType<typeof setTimeout>;
+  clearTimer: (timer: ReturnType<typeof setTimeout>) => void;
+  flush: () => void;
+} {
+  let nextId = 1;
+  const pending = new Map<number, () => void>();
+  return {
+    setTimer: (fn) => {
+      const id = nextId++;
+      pending.set(id, fn);
+      return id as unknown as ReturnType<typeof setTimeout>;
+    },
+    clearTimer: (timer) => {
+      pending.delete(timer as unknown as number);
+    },
+    flush: () => {
+      const callbacks = [...pending.values()];
+      pending.clear();
+      for (const fn of callbacks) {
+        fn();
+      }
+    },
+  };
+}
+
 describe("a change event re-loads and updates the registry", () => {
   it("reloads the changed file and surfaces the result to onReload", () => {
     const sources: Record<string, string> = {
@@ -172,5 +201,56 @@ describe("stop closes the underlying watcher", () => {
     expect(watcher.closed()).toBe(false);
     handle.stop();
     expect(watcher.closed()).toBe(true);
+  });
+});
+
+describe("debounce coalesces duplicate events for the same file", () => {
+  it("emitting the same filename twice before the timer fires triggers only one reload", () => {
+    const sources: Record<string, string> = {
+      "workflows/base-pr.yaml": makeWorkflowYaml("base-pr", 1),
+    };
+    const registry = new WorkflowRegistry({
+      readFile: (path) => sources[path] ?? "",
+    });
+    registry.reloadFile("workflows/base-pr.yaml");
+
+    const { watch, watcher } = makeFakeWatch();
+    const deferred = makeDeferredTimer();
+    const reloads: ReloadResult[] = [];
+    const handle = startWorkflowWatcher(registry, "workflows", {
+      watch,
+      setTimer: deferred.setTimer,
+      clearTimer: deferred.clearTimer,
+      onReload: (result) => reloads.push(result),
+    });
+
+    sources["workflows/base-pr.yaml"] = makeWorkflowYaml("base-pr", 5);
+    // Emit the same filename twice before any timer fires — the first timer
+    // must be cancelled and replaced so only one reload ultimately occurs.
+    watcher.emit("base-pr.yaml");
+    watcher.emit("base-pr.yaml");
+    deferred.flush();
+    handle.stop();
+
+    expect(reloads).toHaveLength(1);
+    expect(reloads[0]?.status).toBe(ReloadStatus.Loaded);
+  });
+});
+
+describe("undefined filename from fs.watch is ignored", () => {
+  it("emitting undefined triggers no reload", () => {
+    const registry = new WorkflowRegistry({ readFile: () => "" });
+    const { watch, watcher } = makeFakeWatch();
+    const reloads: ReloadResult[] = [];
+    const handle = startWorkflowWatcher(registry, "workflows", {
+      watch,
+      setTimer: immediateTimer,
+      onReload: (result) => reloads.push(result),
+    });
+
+    watcher.emit(undefined);
+    handle.stop();
+
+    expect(reloads).toHaveLength(0);
   });
 });
