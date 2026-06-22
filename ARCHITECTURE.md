@@ -82,14 +82,15 @@ Domain code lands in `engine/`, `steps/`, and `db/`. UI work lives in `app/`, `c
 
 ## Data Model
 
-The four primary collections (vision §3):
+The primary collections (vision §3):
 
-| Collection            | Purpose                                                                                                        |
-| --------------------- | -------------------------------------------------------------------------------------------------------------- |
-| `repositories`        | GitHub repos the daemon is configured to watch. Carries per-repo concurrency caps and workflow assignments.    |
-| `workflowRuns`        | One execution of a workflow definition for one PR. Holds the shared context object, metrics, and current step. |
-| `stepInstances`       | One execution of a single step within a run. Records input snapshot, output, logs, status, timing, retries.    |
-| `workflowDefinitions` | Reference copy of the workflow YAML at the time the run started (audit purposes only).                         |
+| Collection            | Purpose                                                                                                                                                            |
+| --------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------ |
+| `commands`            | UI-issued operator control actions (pause / resume / force-retry). The daemon's [commands listener](docs/subsystems/commands-listener.md) applies and clears them. |
+| `repositories`        | GitHub repos the daemon is configured to watch. Carries per-repo concurrency caps and workflow assignments.                                                        |
+| `workflowRuns`        | One execution of a workflow definition for one PR. Holds the shared context object, metrics, and current step.                                                     |
+| `stepInstances`       | One execution of a single step within a run. Records input snapshot, output, logs, status, timing, retries.                                                        |
+| `workflowDefinitions` | Reference copy of the workflow YAML at the time the run started (audit purposes only).                                                                             |
 
 Schemas are strict (Zod) and versioned. Migrations are stored in `src/db/migrations/`.
 

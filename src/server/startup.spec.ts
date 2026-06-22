@@ -53,8 +53,11 @@ describe("startDaemon uses the default migrations registry when no override is p
   it("applies the baseline migration for every daemon-managed collection", async () => {
     const db = createInMemoryDb();
     const result = await startDaemon(db);
-    // Every collection in defaultMigrations should be stamped at v1 on
-    // a fresh DB.
+    // Every collection in defaultMigrations should be stamped on a fresh DB:
+    // the baseline v1 for each, plus workflowRuns' v2 paused backfill (#121).
+    expect(result.migrationReport.applied[Collections.commands.name]).toEqual([
+      1,
+    ]);
     expect(
       result.migrationReport.applied[Collections.repositories.name],
     ).toEqual([1]);
@@ -66,7 +69,7 @@ describe("startDaemon uses the default migrations registry when no override is p
     ).toEqual([1]);
     expect(
       result.migrationReport.applied[Collections.workflowRuns.name],
-    ).toEqual([1]);
+    ).toEqual([1, 2]);
   });
 });
 

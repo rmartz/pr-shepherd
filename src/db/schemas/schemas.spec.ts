@@ -1,5 +1,8 @@
 import { describe, it, expect } from "vitest";
 import {
+  CommandSchema,
+  CommandStatus,
+  CommandType,
   MetaDocSchema,
   RepositorySchema,
   WorkflowRunSchema,
@@ -9,6 +12,31 @@ import {
   StepStatus,
   StepType,
 } from "./index";
+
+describe("CommandSchema round-trip and rejection", () => {
+  const valid = {
+    id: "cmd-1",
+    type: CommandType.PauseRun,
+    payload: { runId: "run-1" },
+    status: CommandStatus.Pending,
+    createdAt: 1716700000000,
+  };
+
+  it("parses a representative valid command", () => {
+    const parsed = CommandSchema.parse(valid);
+    expect(parsed).toEqual(valid);
+  });
+
+  it("rejects a command with an unknown type", () => {
+    expect(() => CommandSchema.parse({ ...valid, type: "nonsense" })).toThrow();
+  });
+
+  it("rejects a command with an unknown field", () => {
+    expect(() =>
+      CommandSchema.parse({ ...valid, unknownField: "extra" }),
+    ).toThrow();
+  });
+});
 
 describe("MetaDocSchema round-trip and rejection", () => {
   const valid = {

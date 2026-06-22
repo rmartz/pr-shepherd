@@ -113,6 +113,12 @@ export async function runSchedulerTick(
       // requires a separate reconciliation pass.
       continue;
     }
+    if (run.paused) {
+      // The run carries an operator hold (#121, `pause_run` command). Skip
+      // admitting its steps; they stay `pending` and auto-resume on a later
+      // tick once a `resume_run` command clears the flag — no manual unpark.
+      continue;
+    }
     const decision = canAdmitStep(
       { stepType: step.stepType, repoId: run.repo },
       counts,

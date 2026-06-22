@@ -25,6 +25,12 @@ export const WorkflowRunSchema = z
     prNumber: z.number().int().nonnegative(),
     prTitle: z.string(),
     status: z.enum(RunStatus),
+    // Operator-issued hold (#121). When `true`, the scheduler skips admitting
+    // this run's pending steps — a derived hold the gate/scheduler model
+    // honors. A `resume_run` command clears it, and admission auto-resumes on
+    // the next tick with no manual unpark. Absent on legacy runs (treated as
+    // not paused); a migration backfills `false`.
+    paused: z.boolean().optional(),
     parentRunId: z.string().optional(),
     childRunIds: z.array(z.string()),
     context: z.record(z.string(), z.unknown()),
