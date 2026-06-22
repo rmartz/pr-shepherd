@@ -34,4 +34,12 @@ describe("resolves a configured workflow id to its on-disk graph", () => {
 
     expect(second).toBe(first);
   });
+
+  it("rethrows non-ENOENT errors rather than recording undefined", () => {
+    const resolveWorkflow = createDiskWorkflowResolver(
+      "/dev/null/not-a-directory",
+    );
+
+    expect(() => resolveWorkflow("any-id")).toThrow();
+  });
 });

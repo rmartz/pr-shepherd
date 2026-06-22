@@ -36,7 +36,8 @@ export function createDiskWorkflowResolver(
     let source: string;
     try {
       source = readFileSync(path, "utf8");
-    } catch {
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") throw err;
       // No definition on disk for this id — an unknown workflow, not an error.
       cache.set(workflowId, undefined);
       return undefined;
