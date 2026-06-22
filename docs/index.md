@@ -30,6 +30,8 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [Gate Model](subsystems/gate-model.md) — the total decision: a state vector walks an ordered gate table to one action.
 - [Atomic-Task Guards](subsystems/atomic-task-guards.md) — pure cross-cutting guards (one-shot rerun, settle window, idempotency keys, verdict-label heal) that make atomic tasks safe to re-run.
 - [Commands Listener](subsystems/commands-listener.md) — the operator → daemon control plane: applies UI-issued pause / resume / force-retry commands to runs and steps, idempotently.
+- [Self-Discovery](subsystems/self-discovery.md) — each cycle recomputes the routable PR set from live state and enrolls newly-eligible PRs into runs idempotently.
+- [Skill Outcome Protocol](subsystems/skill-outcome-protocol.md) — each skill posts one machine-readable outcome record onto the PR; the harness routes (retry / review / advance / escalate / fix / idle) purely off it.
 
 ### Step executors
 
@@ -49,3 +51,4 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Reference
 
 - [Local Development](local-development.md) — running the daemon against the Firebase Emulator.
+- [shepherd CLI](reference/shepherd-cli.md) — the headless daemon's commander entrypoint: start, status, force-retry, inspect.
