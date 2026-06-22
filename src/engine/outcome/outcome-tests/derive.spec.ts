@@ -77,6 +77,20 @@ describe("Derivation surfaces new comment since last outcome", () => {
     expect(newCommentSinceOutcome([first, second], "review")).toBe(false);
   });
 
+  it("does not count a different skill's outcome comment as a new external comment", () => {
+    const reviewOutcome = makeOutcomeComment(makeOutcomeRecord(), {
+      id: 1,
+      createdAt: "2026-06-20T10:00:00Z",
+    });
+    const mergeOutcome = makeOutcomeComment(
+      makeOutcomeRecord({ skill: "merge", outcome: SkillOutcome.NoOp }),
+      { id: 2, createdAt: "2026-06-20T11:00:00Z" },
+    );
+    expect(
+      newCommentSinceOutcome([reviewOutcome, mergeOutcome], "review"),
+    ).toBe(false);
+  });
+
   it("returns false when the skill has no outcome yet", () => {
     expect(newCommentSinceOutcome([makePlainComment()], "review")).toBe(false);
   });

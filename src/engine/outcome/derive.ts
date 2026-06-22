@@ -68,8 +68,9 @@ export function latestOutcomePerSkill(
 //
 // A comment that itself carries an outcome marker is NOT counted as a "new
 // comment" — outcome comments are the daemon's own records, not external
-// signal. Only the SAME skill's outcomes are excluded from the "newer" check;
-// the skill argument scopes which outcome anchors the comparison.
+// signal. ALL outcome comments are excluded, regardless of which skill posted
+// them; the skill argument scopes only which outcome record anchors the
+// timestamp comparison.
 export function newCommentSinceOutcome(
   comments: IssueCommentSnapshot[],
   skill: string,
