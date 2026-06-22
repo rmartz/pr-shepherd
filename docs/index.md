@@ -29,6 +29,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [PR State Derivation](subsystems/pr-state-derivation.md) — one GitHub read → 8 orthogonal state axes.
 - [Gate Model](subsystems/gate-model.md) — the total decision: a state vector walks an ordered gate table to one action.
 - [Atomic-Task Guards](subsystems/atomic-task-guards.md) — pure cross-cutting guards (one-shot rerun, settle window, idempotency keys, verdict-label heal) that make atomic tasks safe to re-run.
+- [Self-Discovery](subsystems/self-discovery.md) — each cycle recomputes the routable PR set from live state and enrolls newly-eligible PRs into runs idempotently.
 - [Skill Outcome Protocol](subsystems/skill-outcome-protocol.md) — each skill posts one machine-readable outcome record onto the PR; the harness routes (retry / review / advance / escalate / fix / idle) purely off it.
 
 ### Step executors
@@ -39,6 +40,8 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Workflows
 
 - [base-pr](workflows/base-pr.md) — the central PR lifecycle: derive → gates → {review / fix / merge / wait\_\*}, re-deriving every tick.
+- [dependabot-pr](workflows/dependabot-pr.md) — the Dependabot PR lifecycle: reuses base-pr's spine, layering mergeable / spawn-fix / rebase classification on the same gate decision.
+- [dependabot-fix](workflows/dependabot-fix.md) — the stripped-down child a Dependabot PR forks to repair a CI failure: implement-fix → review → merge.
 
 ### Design
 

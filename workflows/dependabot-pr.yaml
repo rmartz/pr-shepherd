@@ -1,0 +1,203 @@
+# dependabot-pr — the PR lifecycle workflow for Dependabot pull requests.
+#
+# Drives one Dependabot PR from "opened" toward "merged" (or a recorded
+# parked/failed state). It reuses base-pr's derive → gates spine and its shared
+# review / merge / wait / CI-mutation steps verbatim, then layers the three
+# Dependabot-specific classification branches on top of the *same* gate
+# decision. See docs/design/pr-lifecycle.md §5.2 and docs/workflows/dependabot-pr.md.
+#
+# Classification (all decided by the pure `evaluate_gates` decision):
+#   - mergeable                → review → merge       (action=merge / review)
+#   - ci-failing & fixable     → spawn_fix_pr (fork into dependabot-fix) →
+#                                 wait_fix_pr → rebase_dependabot → wait_ci →
+#                                 re-derive             (action=fix_review, CI)
+#   - conflicting              → rebase_dependabot      (action=fix_review,
+#                                 disambiguated by blockingGate=no_conflict)
+#   - ci-failing & not-fixable → terminal fail          (action=park → null)
+#
+# The conflict-driven and CI-driven fix branches both surface as
+# `action=fix_review`; they are separated by `output.blockingGate`
+# (`no_conflict` vs `ci_green`). A conflicting Dependabot branch is fixed by
+# `@dependabot rebase`, NOT a Claude fix — Dependabot owns the branch — so the
+# conflict path rebases while the CI-failure path spawns a fix child.
+#
+# Dependabot rebase idiosyncrasy (coordinator spec §5): the `rebase_dependabot`
+# action consumes the derived rebase marker (`context.state.dependabotRebase`)
+# so it never posts a redundant `@dependabot rebase` while a rebase is already
+# in progress — that marker is authoritative and current.
+
+id: dependabot-pr
+version: 1
+steps:
+  # --- Derive ---------------------------------------------------------------
+  - id: derive_pr_state
+    stepType: derive_pr_state
+    input: {}
+    routing:
+      - condition: "true"
+        next: evaluate_gates
+
+  # --- Decide ---------------------------------------------------------------
+  # Same provably-total gate decision as base-pr; only the routing differs.
+  # The two `fix_review` rules are ordered most-specific-first and are
+  # disambiguated by `blockingGate`: a conflict-driven fix rebases, a CI-driven
+  # fix spawns a fix child.
+  - id: evaluate_gates
+    stepType: decision
+    input:
+      state: "{{ context.state }}"
+    routing:
+      - condition: "output.action == 'review'"
+        next: review
+      - condition: "output.action == 'merge'"
+        next: merge
+      # Conflicting branch (NoConflict gate): rebase rather than Claude-fix.
+      - condition: "output.action == 'fix_review' && output.blockingGate == 'no_conflict'"
+        next: rebase_dependabot
+      # CI-failing & fixable (CiGreen gate): spawn a fix-PR child run.
+      - condition: "output.action == 'fix_review' && output.blockingGate == 'ci_green'"
+        next: spawn_fix_pr
+      # Any other fix_review (e.g. open copilot threads / changes requested on a
+      # reviewed PR) is handled the same way base-pr would: spawn a fix child.
+      - condition: "output.action == 'fix_review'"
+        next: spawn_fix_pr
+      - condition: "output.action == 'wait_ci'"
+        next: wait_ci
+      - condition: "output.action == 'wait_copilot'"
+        next: wait_copilot_review
+      - condition: "output.action == 'wait_remote'"
+        next: wait_author_push
+      - condition: "output.action == 'authorize_ci'"
+        next: authorize_ci
+      - condition: "output.action == 'rerun_ci'"
+        next: rerun_ci
+      # ci-failing & not-fixable (e.g. CancelledRetried CI) parks: terminal.
+      - condition: "output.action == 'park'"
+        next: null
+      - condition: "true"
+        next: null
+
+  # --- Review (claude_skill → github_api) -----------------------------------
+  - id: review
+    stepType: claude_skill
+    input:
+      skill: review
+      args:
+        - "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: post_review
+  - id: post_review
+    stepType: github_api
+    input:
+      actions: "{{ output.actions }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+
+  # --- Spawn fix PR (fork) → wait → rebase → wait_ci ------------------------
+  # A CI failure on a Dependabot PR is fixed in a child run: fork the
+  # dependabot-fix workflow against this PR, wait for the fix PR's CI to land,
+  # then ask Dependabot to rebase onto the fixed base and wait for fresh CI.
+  - id: spawn_fix_pr
+    stepType: fork
+    input:
+      workflowId: dependabot-fix
+      prNumber: "{{ context.prNumber }}"
+      initialContext:
+        repo: "{{ context.repo }}"
+        prNumber: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: wait_fix_pr
+  - id: wait_fix_pr
+    stepType: wait_external
+    input:
+      kind: fix_pr
+      pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: rebase_dependabot
+
+  # --- Rebase (github_api) --------------------------------------------------
+  # Post `@dependabot rebase`, guarded by the derived in-progress marker so a
+  # rebase already underway is not re-requested. Re-derive via wait_ci after.
+  - id: rebase_dependabot
+    stepType: github_api
+    input:
+      actions:
+        - type: rebase_dependabot
+          params:
+            repo: "{{ context.repo }}"
+            pr: "{{ context.prNumber }}"
+            rebaseInProgress: "{{ context.state.dependabotRebase == 'in_progress' }}"
+    routing:
+      - condition: "true"
+        next: wait_ci
+
+  # --- Waits (durable, no Claude slot) --------------------------------------
+  - id: wait_ci
+    stepType: wait_external
+    input:
+      kind: ci
+      pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+  - id: wait_copilot_review
+    stepType: wait_external
+    input:
+      kind: copilot_review
+      pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+  - id: wait_author_push
+    stepType: wait_author_push
+    input:
+      pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+
+  # --- CI mutations (github_api) --------------------------------------------
+  - id: authorize_ci
+    stepType: github_api
+    input:
+      actions:
+        - type: authorize_ci
+          params:
+            repo: "{{ context.repo }}"
+            pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+  - id: rerun_ci
+    stepType: github_api
+    input:
+      actions:
+        - type: rerun_ci
+          params:
+            repo: "{{ context.repo }}"
+            pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+
+  # --- Merge (claude_skill → github_api) ------------------------------------
+  - id: merge
+    stepType: claude_skill
+    input:
+      skill: merge
+      args:
+        - "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: post_merge
+  - id: post_merge
+    stepType: github_api
+    input:
+      actions: "{{ output.actions }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
