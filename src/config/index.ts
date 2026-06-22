@@ -21,3 +21,19 @@ export {
   type WorkflowGraph,
   type WorkflowStep,
 } from "./workflowLoader";
+export {
+  loadWorkflowRegistry,
+  ReloadStatus,
+  WorkflowRegistry,
+  type RegistryLoadResult,
+  type ReloadResult,
+  type WorkflowRegistryOptions,
+} from "./workflowRegistry";
+export {
+  startWorkflowWatcher,
+  type StartWorkflowWatcherOptions,
+  type WatcherSubscription,
+  type WatchFactory,
+  type WatchListener,
+  type WorkflowWatcherHandle,
+} from "./workflowWatcher";
