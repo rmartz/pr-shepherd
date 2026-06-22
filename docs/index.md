@@ -31,6 +31,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [Atomic-Task Guards](subsystems/atomic-task-guards.md) — pure cross-cutting guards (one-shot rerun, settle window, idempotency keys, verdict-label heal) that make atomic tasks safe to re-run.
 - [Self-Discovery](subsystems/self-discovery.md) — each cycle recomputes the routable PR set from live state and enrolls newly-eligible PRs into runs idempotently.
 - [Skill Outcome Protocol](subsystems/skill-outcome-protocol.md) — each skill posts one machine-readable outcome record onto the PR; the harness routes (retry / review / advance / escalate / fix / idle) purely off it.
+- [Workflow Hot-Reload](subsystems/workflow-hot-reload.md) — an in-memory registry of loaded workflow graphs that a file watcher refreshes on a `workflows/*.yaml` change, retaining the last-good definition when a hot edit fails validation.
 
 ### Step executors
 
