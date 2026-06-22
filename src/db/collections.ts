@@ -1,9 +1,11 @@
 import {
+  CommandSchema,
   MetaDocSchema,
   RepositorySchema,
   WorkflowRunSchema,
   StepInstanceSchema,
   WorkflowDefinitionSchema,
+  type Command,
   type MetaDoc,
   type Repository,
   type WorkflowRun,
@@ -21,6 +23,11 @@ import type { CollectionDef } from "./types";
 // version (see `src/db/migrations/`). Stored under the literal name
 // `_meta` so it cannot collide with a user-facing collection.
 export const Collections = {
+  commands: {
+    name: "commands",
+    schema: CommandSchema,
+    idField: "id",
+  } satisfies CollectionDef<Command>,
   meta: {
     name: "_meta",
     schema: MetaDocSchema,

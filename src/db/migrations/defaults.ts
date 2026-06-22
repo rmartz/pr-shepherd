@@ -1,5 +1,6 @@
 import { Collections } from "../collections";
 import type { MigrationsByCollection } from "./index";
+import { commandsMigrations } from "./commands";
 import { repositoriesMigrations } from "./repositories";
 import { stepInstancesMigrations } from "./stepInstances";
 import { workflowDefinitionsMigrations } from "./workflowDefinitions";
@@ -12,6 +13,7 @@ import { workflowRunsMigrations } from "./workflowRuns";
 //
 // Kept in alphabetical order to minimize merge conflicts.
 export const defaultMigrations: MigrationsByCollection = {
+  [Collections.commands.name]: commandsMigrations,
   [Collections.repositories.name]: repositoriesMigrations,
   [Collections.stepInstances.name]: stepInstancesMigrations,
   [Collections.workflowDefinitions.name]: workflowDefinitionsMigrations,
