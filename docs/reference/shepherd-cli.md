@@ -1,0 +1,45 @@
+---
+type: Reference
+title: shepherd CLI
+description: The headless daemon's commander-based command-line interface — start, status, force-retry, inspect.
+tags: [cli, daemon, commander]
+---
+
+# shepherd CLI
+
+`shepherd` is the command-line entrypoint for the headless PR Shepherd daemon. It is a [commander](https://github.com/tj/commander.js) program defined at `src/cli/shepherd.ts`, exposed via the `shepherd` `bin` entry in `package.json`.
+
+The daemon is **headless** — there is no HTTP server, no `server.ts`, and no Next.js bootstrap. The web UI is a separate Vercel deployment that reads daemon state from Firestore directly. See [ARCHITECTURE.md](../../ARCHITECTURE.md#deployment-topology) for the split and Epic [#9](https://github.com/rmartz/pr-shepherd/issues/9) for the runtime goal.
+
+## Subcommands
+
+| Command               | Purpose                                                |
+| --------------------- | ------------------------------------------------------ |
+| `start`               | Boot the engine and run the daemon in the foreground.  |
+| `status`              | Print a summary of active runs and daemon health.      |
+| `force-retry <runId>` | Reset a run so the scheduler re-dispatches it.         |
+| `inspect <runId>`     | Print a run's context, current step, and step history. |
+| `--help` / `-h`       | Print usage for the program or a subcommand.           |
+
+```bash
+shepherd --help
+shepherd start
+shepherd status
+shepherd force-retry <runId>
+shepherd inspect <runId>
+```
+
+## Structure
+
+The CLI is split for testability:
+
+- **`src/cli/shepherd.ts`** — the entrypoint. Parses argv, then maps outcomes to process exit codes: `0` for success and `--help`, `1` for an unimplemented handler or a parse error. It is the only module that touches `process` so the program itself stays pure.
+- **`src/cli/program.ts`** — `buildProgram(handlers)` constructs the commander program and registers each subcommand against an injectable `ShepherdHandlers` map. Injecting handlers keeps dispatch unit-testable with spies and no real Firestore. The `ShepherdCommand` enum holds the literal subcommand names.
+- **`src/cli/handlers/`** — one module per subcommand (`start`, `status`, `forceRetry`, `inspect`), barrel-exported from `index.ts`. Separating the handlers lets later issues fill in real behavior without touching the commander wiring.
+
+## Scaffold status
+
+This is the **scaffold + dispatch wiring** (issue [#206](https://github.com/rmartz/pr-shepherd/issues/206)). Every handler currently throws `NotImplementedError`, which the entrypoint reports as a clear "not yet implemented" message rather than a stack trace.
+
+- `start`'s real engine bootstrap — load config, connect the Firestore admin SDK, start the scheduler + commands listener, and install the SIGTERM drain — lands in the daemon-bootstrap follow-up ([#207](https://github.com/rmartz/pr-shepherd/issues/207)).
+- `status`, `force-retry`, and `inspect` will gain thin Firestore-reading/writing implementations in later Epic 6 issues.
