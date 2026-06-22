@@ -37,9 +37,7 @@ The CLI is split for testability:
 - **`src/cli/program.ts`** — `buildProgram(handlers)` constructs the commander program and registers each subcommand against an injectable `ShepherdHandlers` map. Injecting handlers keeps dispatch unit-testable with spies and no real Firestore. The `ShepherdCommand` enum holds the literal subcommand names.
 - **`src/cli/handlers/`** — one module per subcommand (`start`, `status`, `forceRetry`, `inspect`), barrel-exported from `index.ts`. Separating the handlers lets later issues fill in real behavior without touching the commander wiring.
 
-## Scaffold status
+## Handler status
 
-This is the **scaffold + dispatch wiring** (issue [#206](https://github.com/rmartz/pr-shepherd/issues/206)). Every handler currently throws `NotImplementedError`, which the entrypoint reports as a clear "not yet implemented" message rather than a stack trace.
-
-- `start`'s real engine bootstrap — load config, connect the Firestore admin SDK, start the scheduler + commands listener, and install the SIGTERM drain — lands in the daemon-bootstrap follow-up ([#207](https://github.com/rmartz/pr-shepherd/issues/207)).
-- `status`, `force-retry`, and `inspect` will gain thin Firestore-reading/writing implementations in later Epic 6 issues.
+- **`start`** boots the headless daemon via the [engine bootstrap](../subsystems/engine-bootstrap.md) ([#207](https://github.com/rmartz/pr-shepherd/issues/207)): load config → admin-SDK Firestore `Db` → crash recovery → scheduler + commands listener → initial self-discovery pass. The live PR-read transport that feeds self-discovery lands in Epic 12; until then `start` boots with an empty-sweep transport (enrolling nothing) and warns. Graceful SIGTERM shutdown is the stacked follow-up ([#208](https://github.com/rmartz/pr-shepherd/issues/208)) — `start` leaves a clean seam by holding the daemon handle.
+- **`status`**, **`force-retry`**, and **`inspect`** remain scaffolds that throw `NotImplementedError` (reported as a clear "not yet implemented" message rather than a stack trace); they gain thin Firestore-reading/writing implementations in later Epic 6 issues.
