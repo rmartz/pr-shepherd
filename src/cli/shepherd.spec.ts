@@ -1,9 +1,10 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { main } from "./shepherd";
 
-// The entrypoint wires the default handlers, which are all scaffolds that
-// throw NotImplementedError. These tests assert how `main` maps those
-// outcomes — and commander's parse errors — onto process exit codes,
+// The entrypoint wires the default handlers. `start` now boots the engine
+// (#207); the remaining handlers (`status`, `force-retry`, `inspect`) are still
+// scaffolds that throw NotImplementedError. These tests assert how `main` maps
+// those outcomes — and commander's parse errors — onto process exit codes,
 // without spawning the binary or touching Firestore.
 
 afterEach(() => {
@@ -15,7 +16,7 @@ describe("main maps an unimplemented subcommand to a clean failure", () => {
     const stderr = vi
       .spyOn(process.stderr, "write")
       .mockImplementation(() => true);
-    const code = await main(["start"]);
+    const code = await main(["status"]);
     expect(code).toBe(1);
     expect(stderr).toHaveBeenCalledWith(
       expect.stringContaining("not yet implemented"),
