@@ -38,6 +38,8 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Workflows
 
 - [base-pr](workflows/base-pr.md) — the central PR lifecycle: derive → gates → {review / fix / merge / wait\_\*}, re-deriving every tick.
+- [dependabot-pr](workflows/dependabot-pr.md) — the Dependabot PR lifecycle: reuses base-pr's spine, layering mergeable / spawn-fix / rebase classification on the same gate decision.
+- [dependabot-fix](workflows/dependabot-fix.md) — the stripped-down child a Dependabot PR forks to repair a CI failure: implement-fix → review → merge.
 
 ### Design
 
