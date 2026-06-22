@@ -161,6 +161,40 @@ describe("runSchedulerTick admits a single pending candidate when capacity is av
   });
 });
 
+describe("runSchedulerTick skips steps belonging to a paused run (#121)", () => {
+  it("leaves a paused run's pending step pending and does not admit it", async () => {
+    const db = createInMemoryDb();
+    const run = await seedRun(db, { paused: true });
+    await seedPendingStep(db, {
+      id: "step-1",
+      runId: run.id,
+      createdAt: 1000,
+    });
+    const report = await runSchedulerTick(db, makeConfig());
+    expect(report.admitted).toHaveLength(0);
+    const updated = await db.get(Collections.stepInstances, "step-1");
+    expect(updated?.status).toBe(StepStatus.Pending);
+  });
+
+  it("admits the step again once the run is resumed (auto-resume, no manual unpark)", async () => {
+    const db = createInMemoryDb();
+    const run = await seedRun(db, { paused: true });
+    await seedPendingStep(db, {
+      id: "step-1",
+      runId: run.id,
+      createdAt: 1000,
+    });
+    await runSchedulerTick(db, makeConfig());
+
+    await db.update(Collections.workflowRuns, run.id, { paused: false });
+    const report = await runSchedulerTick(db, makeConfig());
+
+    expect(report.admitted).toHaveLength(1);
+    const updated = await db.get(Collections.stepInstances, "step-1");
+    expect(updated?.status).toBe(StepStatus.Queued);
+  });
+});
+
 describe("runSchedulerTick admits multiple pending candidates in one tick when capacity permits", () => {
   it("transitions all admitted candidates and updates local counts so subsequent candidates see the new state", async () => {
     const db = createInMemoryDb();
