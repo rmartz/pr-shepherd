@@ -17,6 +17,9 @@ export function makeConfig(): SchedulerConfig {
       githubApiMax: 4,
       defaultRepoMax: 2,
     },
+    heartbeat: {
+      intervalSeconds: 15,
+    },
   };
 }
 
@@ -98,6 +101,26 @@ export async function seedPendingStep(
   };
   await db.create(Collections.stepInstances, step);
   return step;
+}
+
+export async function seedRunningStepWithHeartbeat(
+  db: Db,
+  args: {
+    id: string;
+    runId: string;
+    heartbeatAt: number;
+  },
+): Promise<void> {
+  const step: StepInstance = {
+    ...makeBaseStepInstance(),
+    id: args.id,
+    runId: args.runId,
+    status: StepStatus.Running,
+    createdAt: 1000,
+    startedAt: 2000,
+    heartbeatAt: args.heartbeatAt,
+  };
+  await db.create(Collections.stepInstances, step);
 }
 
 export async function seedActiveStep(
