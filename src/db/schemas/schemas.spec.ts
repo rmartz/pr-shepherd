@@ -3,6 +3,8 @@ import {
   CommandSchema,
   CommandStatus,
   CommandType,
+  EventRecordSchema,
+  EventType,
   MetaDocSchema,
   RepositorySchema,
   WorkflowRunSchema,
@@ -213,5 +215,38 @@ describe("WorkflowDefinitionSchema round-trip and rejection", () => {
   it("rejects a workflow definition with an unknown field", () => {
     const withExtra = { ...valid, unknownField: "extra" };
     expect(() => WorkflowDefinitionSchema.parse(withExtra)).toThrow();
+  });
+});
+
+describe("EventRecordSchema round-trip and rejection", () => {
+  const valid = {
+    id: "event-1",
+    runId: "run-1",
+    repo: "owner/repo",
+    prNumber: 42,
+    headSha: "abc123",
+    decidingGate: "MERGE",
+    eventType: EventType.MergeCompleted,
+    stepInstanceId: "step-1",
+    attempts: 2,
+    outcome: "merged",
+    logs: ["squash-merged"],
+    createdAt: 1716700000000,
+  };
+
+  it("parses a representative valid event record", () => {
+    expect(EventRecordSchema.parse(valid).eventType).toBe(
+      EventType.MergeCompleted,
+    );
+  });
+
+  it("rejects an event record with attempts below 1", () => {
+    expect(() => EventRecordSchema.parse({ ...valid, attempts: 0 })).toThrow();
+  });
+
+  it("rejects an event record with an unknown field", () => {
+    expect(() =>
+      EventRecordSchema.parse({ ...valid, unknownField: "extra" }),
+    ).toThrow();
   });
 });
