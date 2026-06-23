@@ -39,7 +39,7 @@ repositories:
 # Polling and scheduler cadence.
 poll:
   newPrIntervalSeconds: 60 # how often to scan GitHub for new PRs
-  schedulerIntervalSeconds: 5 # how often the scheduler loop runs
+  reconcileIntervalSeconds: 60 # scheduler safety-net poll (it ticks on events; this only covers dropped events / crash windows)
   heartbeatIntervalSeconds: 15 # step heartbeat cadence (must be < scheduler dead-detect threshold)
 
 # Data store adapter. Three options, all behind the same `Db` interface in

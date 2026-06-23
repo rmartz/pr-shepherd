@@ -1,7 +1,7 @@
-import { describe, it, expect, vi } from "vitest";
+import { describe, it, expect } from "vitest";
 import { Collections } from "@/db/collections";
 import { StepStatus, StepType } from "@/db/schemas";
-import { runSchedulerTick, startScheduler } from "./loop";
+import { runSchedulerTick } from "./loop";
 import { AdmissionRejectReason } from "./concurrency";
 import {
   makeConfig,
@@ -266,73 +266,5 @@ describe("runSchedulerTick only fetches workflow runs referenced by in-flight st
     };
     await runSchedulerTick(db, makeConfig());
     expect(fetchedIds).toEqual(["relevant"]);
-  });
-});
-
-describe("startScheduler runs ticks on the configured cadence and stops cleanly", () => {
-  it("invokes runSchedulerTick at the configured interval and stops when requested", async () => {
-    const db = makeDb();
-    const tickCount = { n: 0 };
-    const sleeps: number[] = [];
-    // Inject a sleep that resolves immediately and records the requested
-    // delay; that lets us assert the cadence without actually waiting.
-    // The injected sleep must yield via a macrotask so the test's own
-    // `setTimeout(r, 0)` waits below can actually fire — otherwise the
-    // loop's microtask chain starves the event loop.
-    const sleep = vi.fn(async (ms: number) => {
-      sleeps.push(ms);
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
-    });
-    // We can't directly mock runSchedulerTick from inside the loop module,
-    // but we can observe its effect: each tick on an empty DB returns a
-    // report (no admits) and increments the count via a beforeTick hook.
-    const handle = startScheduler(db, makeConfig(), {
-      intervalMs: 5000,
-      sleep,
-      onTick: () => {
-        tickCount.n++;
-      },
-    });
-    // Yield a few microtasks to let the loop iterate.
-    await new Promise((r) => setTimeout(r, 0));
-    await new Promise((r) => setTimeout(r, 0));
-    await new Promise((r) => setTimeout(r, 0));
-    handle.stop();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(tickCount.n).toBeGreaterThan(0);
-    expect(sleep).toHaveBeenCalled();
-    expect(sleeps[0]).toBe(5000);
-  });
-
-  it("survives a thrown error in a tick (logs via onTickError) and keeps running", async () => {
-    const db = makeDb();
-    const errors: unknown[] = [];
-    const sleep = vi.fn(async () => {
-      await new Promise<void>((resolve) => {
-        setTimeout(resolve, 0);
-      });
-    });
-    let calls = 0;
-    const handle = startScheduler(db, makeConfig(), {
-      intervalMs: 1,
-      sleep,
-      onTick: () => {
-        calls++;
-        if (calls === 1) {
-          throw new Error("first-tick boom");
-        }
-      },
-      onTickError: (err) => {
-        errors.push(err);
-      },
-    });
-    // Let two ticks fire.
-    for (let i = 0; i < 10; i++) await new Promise((r) => setTimeout(r, 0));
-    handle.stop();
-    await new Promise((r) => setTimeout(r, 0));
-    expect(errors).toHaveLength(1);
-    expect(calls).toBeGreaterThanOrEqual(2);
   });
 });

@@ -4,7 +4,7 @@ import type { PrReadTransport } from "@/engine/discovery";
 import type { WorkflowResolver } from "@/engine/enrollment";
 import type { CommandListenerHandle } from "@/engine/commands";
 import type { CrashRecoveryReport } from "@/engine/recovery/startup";
-import type { SchedulerHandle } from "@/engine/scheduler/loop";
+import type { SchedulerHandle } from "@/engine/scheduler";
 import type { SelfDiscoveryReport } from "@/engine/self-discovery";
 
 // ---------------------------------------------------------------------------

@@ -29,7 +29,7 @@ function makeConfig(overrides: Partial<Config["poll"]> = {}): Config {
     repositories: [makeRepositoryConfig({ id: "acme/alpha" })],
     poll: {
       newPrIntervalSeconds: 60,
-      schedulerIntervalSeconds: 5,
+      reconcileIntervalSeconds: 5,
       heartbeatIntervalSeconds: 15,
       ...overrides,
     },

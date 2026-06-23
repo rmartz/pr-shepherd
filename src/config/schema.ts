@@ -44,11 +44,14 @@ const RepositorySchema = z
   })
   .strict();
 
-// Polling and scheduler cadence, in seconds.
+// Polling and scheduler cadence, in seconds. The scheduler is event-driven
+// (it ticks the instant relevant state changes); `reconcileIntervalSeconds` is
+// the low-frequency safety-net poll that covers dropped events and crash
+// windows, not the primary tick cadence — hence the relaxed default.
 const PollSchema = z
   .object({
     newPrIntervalSeconds: z.number().int().positive().default(60),
-    schedulerIntervalSeconds: z.number().int().positive().default(5),
+    reconcileIntervalSeconds: z.number().int().positive().default(60),
     heartbeatIntervalSeconds: z.number().int().positive().default(15),
   })
   .strict();

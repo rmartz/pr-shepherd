@@ -28,7 +28,7 @@ function makeConfigObject(overrides: Record<string, unknown> = {}) {
     ],
     poll: {
       newPrIntervalSeconds: 60,
-      schedulerIntervalSeconds: 5,
+      reconcileIntervalSeconds: 5,
       heartbeatIntervalSeconds: 15,
     },
     db: {

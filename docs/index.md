@@ -32,6 +32,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [Atomic-Task Guards](subsystems/atomic-task-guards.md) — pure cross-cutting guards (one-shot rerun, settle window, idempotency keys, verdict-label heal) that make atomic tasks safe to re-run.
 - [Commands Listener](subsystems/commands-listener.md) — the operator → daemon control plane: applies UI-issued pause / resume / force-retry commands to runs and steps, idempotently.
 - [Engine Bootstrap](subsystems/engine-bootstrap.md) — the `shepherd start` boot sequence: config → admin Firestore → crash recovery → scheduler + commands listener → initial self-discovery, wired through injectable seams.
+- [Event-Driven Scheduler](subsystems/event-driven-scheduler.md) — the scheduler ticks the instant state changes (debounced/coalesced) via Firestore subscriptions, with a low-frequency reconciliation poll as the fail-open safety net; events are a trigger, never a source of truth.
 - [Graceful Shutdown](subsystems/graceful-shutdown.md) — SIGTERM/SIGINT halt the scheduler, drain in-flight steps within a bounded grace period, tear the daemon down, and exit (non-zero if the grace elapses) — never hanging.
 - [Self-Discovery](subsystems/self-discovery.md) — each cycle recomputes the routable PR set from live state and enrolls newly-eligible PRs into runs idempotently.
 - [Skill Outcome Protocol](subsystems/skill-outcome-protocol.md) — each skill posts one machine-readable outcome record onto the PR; the harness routes (retry / review / advance / escalate / fix / idle) purely off it.
