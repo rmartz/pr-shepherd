@@ -67,8 +67,10 @@ export async function gracefulShutdown(
     ((ms: number) => new Promise<void>((resolve) => setTimeout(resolve, ms)));
   const onExit = options.onExit ?? ((code: number) => process.exit(code));
 
-  // 1. Stop admitting new steps — the scheduler's next tick won't run.
-  handle.scheduler.stop();
+  // 1. Stop admitting new steps. The scheduler's synchronous teardown (cancel
+  //    timers, detach subscriptions) runs immediately; its awaited in-flight
+  //    drain is covered by the bounded step-drain below, so it need not block.
+  void handle.scheduler.stop();
 
   // 2. Drain in-flight (`running`) steps, bounded by the grace period.
   const deadline = now() + drainTimeoutMs;

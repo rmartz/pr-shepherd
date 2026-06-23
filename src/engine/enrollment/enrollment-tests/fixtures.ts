@@ -23,7 +23,7 @@ export function makeConfig(repositories: RepositoryConfig[]): Config {
     repositories,
     poll: {
       newPrIntervalSeconds: 60,
-      schedulerIntervalSeconds: 5,
+      reconcileIntervalSeconds: 5,
       heartbeatIntervalSeconds: 15,
     },
     db: { adapter: DbAdapterKind.InMemory, logOverflowPath: "./data/logs" },

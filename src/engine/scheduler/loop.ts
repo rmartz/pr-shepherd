@@ -32,9 +32,9 @@ import {
 //   4. Updates local counts after each admission so subsequent candidates
 //      within the same tick see the saturating effect.
 //
-// `startScheduler` is the long-running wrapper that invokes `runSchedulerTick`
-// on a configured cadence. It is intentionally thin so tests can supply
-// their own `sleep` and observe each tick via hooks.
+// The long-running wrapper that drives `runSchedulerTick` in response to
+// state changes — with a low-frequency reconciliation poll as a safety net —
+// lives in `eventScheduler.ts` (#120).
 // ---------------------------------------------------------------------------
 
 export interface SchedulerConfig {
@@ -177,68 +177,4 @@ function incrementCounts(
     default:
       break;
   }
-}
-
-// ---------------------------------------------------------------------------
-// startScheduler — long-running cadence wrapper around runSchedulerTick.
-//
-// `sleep` is injectable so tests can advance the loop without real timers.
-// `onTick` fires after every tick (useful for tests to count iterations or
-// to swap in a stub for the actual work). `onTickError` receives any error
-// thrown during a tick so the loop can survive transient failures (e.g. a
-// Db hiccup) without crashing the daemon.
-// ---------------------------------------------------------------------------
-
-export interface SchedulerHandle {
-  stop: () => void;
-}
-
-export interface StartSchedulerOptions {
-  intervalMs: number;
-  sleep?: (ms: number) => Promise<void>;
-  onTick?: (report: SchedulerTickReport | undefined) => void;
-  onTickError?: (err: unknown) => void;
-}
-
-export function startScheduler(
-  db: Db,
-  config: SchedulerConfig,
-  options: StartSchedulerOptions,
-): SchedulerHandle {
-  const sleep =
-    options.sleep ??
-    ((ms: number) =>
-      new Promise<void>((resolve) => {
-        setTimeout(resolve, ms);
-      }));
-  let running = true;
-
-  const loop = async (): Promise<void> => {
-    while (running) {
-      let report: SchedulerTickReport | undefined;
-      try {
-        report = await runSchedulerTick(db, config);
-        options.onTick?.(report);
-      } catch (err) {
-        // A throw from `runSchedulerTick` (Db hiccup) or from the `onTick`
-        // hook (test stub) must not crash the daemon. The loop survives
-        // and the error is surfaced to the configured handler.
-        options.onTickError?.(err);
-      }
-      // Note: `running` is mutated externally by `handle.stop()`, so the
-      // next `while (running)` evaluation after sleep is what exits the
-      // loop. We do not short-circuit before sleep — at the cost of one
-      // extra interval delay on shutdown, this keeps the loop trivially
-      // analyzable (no flow-control branch ESLint flags as unreachable).
-      await sleep(options.intervalMs);
-    }
-  };
-
-  void loop();
-
-  return {
-    stop: () => {
-      running = false;
-    },
-  };
 }

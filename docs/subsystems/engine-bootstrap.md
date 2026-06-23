@@ -19,7 +19,7 @@ The daemon is headless by design — no HTTP server, no port, no Next.js bootstr
 1. **loadConfig** — read and validate `config.yaml` (the [config loader](../../src/config)).
 2. **createDb** — construct the admin-SDK Firestore [`Db`](../adapters) keyed on `config.db.adapter`.
 3. **recoverFromCrash** — reconcile state a previous crash left behind, **before** the scheduler is allowed to admit work, so recovery never races a tick.
-4. **startScheduler** — begin the [scheduler](../../src/engine/scheduler) tick loop on `config.poll.schedulerIntervalSeconds`.
+4. **startScheduler** — begin the [event-driven scheduler](event-driven-scheduler.md): it ticks on Firestore-subscribed state changes, with `config.poll.reconcileIntervalSeconds` driving the safety-net reconciliation poll.
 5. **startCommandListener** — attach the [commands listener](commands-listener.md) (operator → daemon control plane) on `config.commands.collectionPath`.
 6. **runSelfDiscoveryPass** — run an initial [self-discovery](self-discovery.md) pass (`Upfront`) to enroll the configured repos' open PRs.
 

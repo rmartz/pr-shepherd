@@ -4,7 +4,7 @@ import type { Config } from "@/config";
 import type { Db } from "@/db/types";
 import { startCommandListener } from "@/engine/commands";
 import { recoverFromCrash } from "@/engine/recovery/startup";
-import { startScheduler } from "@/engine/scheduler/loop";
+import { startScheduler } from "@/engine/scheduler";
 import { DiscoveryPhase, runSelfDiscoveryPass } from "@/engine/self-discovery";
 import { createDiskWorkflowResolver } from "./resolveWorkflow";
 import type { BootstrapDeps, BootstrapOptions, DaemonHandle } from "./types";
@@ -20,7 +20,8 @@ import type { BootstrapDeps, BootstrapOptions, DaemonHandle } from "./types";
 //   2. createDb        — construct the admin-SDK Firestore `Db` from config.
 //   3. recoverFromCrash — reconcile state a previous crash left behind, BEFORE
 //                         the scheduler is allowed to admit work.
-//   4. startScheduler  — begin the tick loop on the configured cadence.
+//   4. startScheduler  — begin the event-driven tick loop (Firestore-triggered,
+//                         with a reconciliation poll as the safety net).
 //   5. startCommandListener — attach the operator → daemon control plane.
 //   6. runSelfDiscoveryPass — enroll the configured repos' open PRs upfront.
 //
@@ -46,7 +47,7 @@ function resolveDeps(overrides: Partial<BootstrapDeps> = {}): BootstrapDeps {
       startScheduler(
         db,
         { concurrency: config.concurrency },
-        { intervalMs: config.poll.schedulerIntervalSeconds * 1000 },
+        { reconcileIntervalMs: config.poll.reconcileIntervalSeconds * 1000 },
       ),
     startCommandListener: (db, config) =>
       startCommandListener(db, {
@@ -93,7 +94,11 @@ export async function bootstrapEngine(
   const stop = (): void => {
     if (stopped) return;
     stopped = true;
-    scheduler.stop();
+    // The scheduler's synchronous teardown (cancel timers, detach
+    // subscriptions) runs before its `stop()` promise's first await, so
+    // admission halts immediately; the awaited part only drains the brief
+    // in-flight admission tick, which is restart-safe and need not block here.
+    void scheduler.stop();
     commands.stop();
     db.closeSubscriptions();
   };

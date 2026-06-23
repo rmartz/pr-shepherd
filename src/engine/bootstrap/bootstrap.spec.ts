@@ -7,7 +7,7 @@ import {
   makeWorkflowRun,
 } from "@/engine/commands/commands-tests/fixtures";
 import type { CrashRecoveryReport } from "@/engine/recovery/startup";
-import type { SchedulerHandle } from "@/engine/scheduler/loop";
+import type { SchedulerHandle } from "@/engine/scheduler";
 import { DiscoveryPhase } from "@/engine/self-discovery";
 import { bootstrapEngine } from "./bootstrap";
 import {
