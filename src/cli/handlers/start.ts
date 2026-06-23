@@ -1,6 +1,7 @@
 import { bootstrapEngine } from "@/engine/bootstrap";
 import type { DaemonHandle } from "@/engine/bootstrap";
 import type { PrReadTransport } from "@/engine/discovery";
+import { installShutdownHandlers } from "@/engine/shutdown";
 
 // Handler for `shepherd start` — the keystone of Epic 6 (#207).
 //
@@ -11,11 +12,9 @@ import type { PrReadTransport } from "@/engine/discovery";
 // reaches its state through Firestore directly (ARCHITECTURE.md topology).
 //
 // `bootstrapEngine` owns the wiring; this handler supplies the read-side PR
-// transport and keeps the returned `DaemonHandle` alive. Graceful shutdown —
-// SIGTERM draining in-flight steps before exit — is the stacked follow-up
-// (#208); this handler leaves a clean seam by holding the handle (whose
-// `stop()` that issue drives the drain through) rather than implementing the
-// drain here.
+// transport, keeps the returned `DaemonHandle` alive, and installs graceful
+// shutdown (#208) — SIGTERM/SIGINT halt the scheduler, drain in-flight steps
+// within a bounded grace period, then exit through `handle.stop()`.
 
 // The live PR-read transport (`listOpenPrs`) is the webhook/poll read side
 // landing in Epic 12. Until it merges, the daemon boots with an empty-sweep
@@ -32,11 +31,11 @@ function emptySweepTransport(): PrReadTransport {
 }
 
 // The live daemon handle, exported so the process keeps a reference to it (and
-// therefore its subscriptions) while it runs. Graceful shutdown (#208) reads
-// this from its SIGTERM handler to drive the in-flight-step drain through
-// `handle.stop()`.
+// therefore its subscriptions) while it runs, and so tests can inspect it.
 export let daemon: DaemonHandle | undefined;
 
 export async function runStart(): Promise<void> {
   daemon = await bootstrapEngine({ transport: emptySweepTransport() });
+  // SIGTERM/SIGINT → halt scheduler, drain in-flight steps, exit (#208).
+  installShutdownHandlers(daemon);
 }
