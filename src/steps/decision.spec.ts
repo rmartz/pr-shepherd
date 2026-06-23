@@ -15,6 +15,7 @@ import {
   type ConcurrencyConfig,
 } from "@/engine/scheduler/concurrency";
 import { createRunner } from "@/engine/runner";
+import { makeNoopRuntime } from "@/engine/runner/runner-tests/fixtures";
 import { decisionExecutor } from "./decision";
 
 // ---------------------------------------------------------------------------
@@ -78,7 +79,10 @@ function makeDecisionStep(): StepInstance {
 
 describe("decisionExecutor returns an empty output", () => {
   it("resolves with output: {} regardless of step state", async () => {
-    const result = await decisionExecutor(makeDecisionStep());
+    const result = await decisionExecutor(
+      makeDecisionStep(),
+      makeNoopRuntime(),
+    );
     expect(result.output).toEqual({});
   });
 });

@@ -11,6 +11,7 @@ import {
 import type { Db } from "@/db/types";
 import { createRunner, noopExecutor } from "./index";
 import type { StepExecutor, ExecutorResult } from "./index";
+import { makeNoopRuntime } from "./runner-tests/fixtures";
 
 // ---------------------------------------------------------------------------
 // Tests for the runner — the component that picks up `queued` step
@@ -347,13 +348,16 @@ describe("runner.register adds an executor after construction", () => {
 
 describe("noopExecutor returns an empty output", () => {
   it("resolves with output: {} regardless of input", async () => {
-    const result = await noopExecutor({
-      ...makeBaseStepInstance(),
-      id: "step-x",
-      runId: "run-x",
-      createdAt: 1,
-      input: { anything: 1 },
-    });
+    const result = await noopExecutor(
+      {
+        ...makeBaseStepInstance(),
+        id: "step-x",
+        runId: "run-x",
+        createdAt: 1,
+        input: { anything: 1 },
+      },
+      makeNoopRuntime(),
+    );
     expect(result.output).toEqual({});
   });
 });

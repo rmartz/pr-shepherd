@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
 import { createInMemoryDb } from "@/db/adapters/inMemory";
+import { createStepExecutorRuntime } from "@/engine/runner";
 import { Collections } from "@/db/collections";
 import {
   RunStatus,
@@ -378,7 +379,7 @@ describe("createWaitExternalExecutor transitions running → waiting immediately
     });
 
     // Start the executor but do not await it yet.
-    const execPromise = executor(step);
+    const execPromise = executor(step, createStepExecutorRuntime(db, step));
 
     // Yield to the microtask queue so the executor can reach its first
     // await (the db.update for status: waiting).
@@ -410,7 +411,7 @@ describe("createWaitExternalExecutor populates externalWaitMs metric", () => {
       spawn: makeSpawnFn(proc),
     });
 
-    const execPromise = executor(step);
+    const execPromise = executor(step, createStepExecutorRuntime(db, step));
     // Allow the executor to pass through await db.update() and enter
     // runWaitExternal so the close listener is registered before we emit.
     await Promise.resolve();
@@ -438,7 +439,7 @@ describe("createWaitExternalExecutor returns output passed: true on success", ()
       spawn: makeSpawnFn(proc),
     });
 
-    const execPromise = executor(step);
+    const execPromise = executor(step, createStepExecutorRuntime(db, step));
     // Allow the executor to pass through await db.update() and register
     // close listeners on the subprocess before emitting.
     await Promise.resolve();
@@ -464,7 +465,7 @@ describe("createWaitExternalExecutor writes failure output before throwing", () 
       spawn: makeSpawnFn(proc),
     });
 
-    const execPromise = executor(step);
+    const execPromise = executor(step, createStepExecutorRuntime(db, step));
     // Allow the executor to pass through await db.update() and register
     // close listeners on the subprocess before emitting.
     await Promise.resolve();
@@ -486,7 +487,7 @@ describe("createWaitExternalExecutor writes failure output before throwing", () 
       spawn: makeSpawnFn(proc),
     });
 
-    const execPromise = executor(step);
+    const execPromise = executor(step, createStepExecutorRuntime(db, step));
     // Allow the executor to pass through await db.update() and register
     // close listeners on the subprocess before emitting.
     await Promise.resolve();

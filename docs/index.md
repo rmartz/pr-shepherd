@@ -38,6 +38,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [Graceful Shutdown](subsystems/graceful-shutdown.md) — SIGTERM/SIGINT halt the scheduler, drain in-flight steps within a bounded grace period, tear the daemon down, and exit (non-zero if the grace elapses) — never hanging.
 - [Self-Discovery](subsystems/self-discovery.md) — each cycle recomputes the routable PR set from live state and enrolls newly-eligible PRs into runs idempotently.
 - [Skill Outcome Protocol](subsystems/skill-outcome-protocol.md) — each skill posts one machine-readable outcome record onto the PR; the harness routes (retry / review / advance / escalate / fix / idle) purely off it.
+- [Step Executor Contract](subsystems/step-executor-contract.md) — the runner ↔ executor contract: a terminal `ExecutorResult` plus a `StepExecutorRuntime` handle that lets `wait_*` executors persist `waiting`/heartbeat state mid-execution.
 - [Workflow Hot-Reload](subsystems/workflow-hot-reload.md) — an in-memory registry of loaded workflow graphs that a file watcher refreshes on a `workflows/*.yaml` change, retaining the last-good definition when a hot edit fails validation.
 
 ### Step executors
