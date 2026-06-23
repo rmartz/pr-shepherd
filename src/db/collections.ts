@@ -3,6 +3,7 @@ import {
   EventRecordSchema,
   MetaDocSchema,
   RepositorySchema,
+  WebhookEventSchema,
   WorkflowRunSchema,
   StepInstanceSchema,
   WorkflowDefinitionSchema,
@@ -10,6 +11,7 @@ import {
   type EventRecord,
   type MetaDoc,
   type Repository,
+  type WebhookEvent,
   type WorkflowRun,
   type StepInstance,
   type WorkflowDefinition,
@@ -50,6 +52,11 @@ export const Collections = {
     schema: StepInstanceSchema,
     idField: "id",
   } satisfies CollectionDef<StepInstance>,
+  webhookEvents: {
+    name: "webhookEvents",
+    schema: WebhookEventSchema,
+    idField: "id",
+  } satisfies CollectionDef<WebhookEvent>,
   workflowDefinitions: {
     name: "workflowDefinitions",
     schema: WorkflowDefinitionSchema,

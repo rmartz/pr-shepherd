@@ -1,19 +1,31 @@
+# npm groups are restricted to minor and patch bumps so a batch PR never mixes
+# low-risk version churn with a breaking change. Major bumps match no group and
+# are raised as individual PRs, isolating the changes most likely to require code
+# updates for separate review.
 version: 2
 updates:
   - package-ecosystem: npm
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore"
       include: "scope"
     groups:
       dev-dependencies:
         dependency-type: development
+        update-types:
+          - "minor"
+          - "patch"
         patterns:
           - "*"
       production-dependencies:
         dependency-type: production
+        update-types:
+          - "minor"
+          - "patch"
         patterns:
           - "*"
 
@@ -21,6 +33,8 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      default-days: 7
     commit-message:
       prefix: "chore"
       include: "scope"
