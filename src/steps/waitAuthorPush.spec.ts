@@ -1,10 +1,36 @@
 import { describe, it, expect, vi } from "vitest";
 import { StepStatus, StepType, type StepInstance } from "@/db/schemas";
+import type { StepExecutorRuntime } from "@/engine/runner";
 import {
   createWaitAuthorPushExecutor,
   DEFAULT_WAIT_AUTHOR_PUSH_POLL_INTERVAL_MS,
   DEFAULT_WAIT_AUTHOR_PUSH_TIMEOUT_MS,
 } from "./waitAuthorPush";
+
+// A recording stub for the runner-provided runtime handle. These tests
+// exercise the poll loop in isolation, so the runtime's persistence is
+// stubbed out; the runner-wired behavior is covered in runtime.spec.ts.
+function makeRuntime(): StepExecutorRuntime & {
+  enterWaitingCalls: number;
+  heartbeatDeltas: (number | undefined)[];
+} {
+  const heartbeatDeltas: (number | undefined)[] = [];
+  let enterWaitingCalls = 0;
+  return {
+    get enterWaitingCalls() {
+      return enterWaitingCalls;
+    },
+    heartbeatDeltas,
+    enterWaiting: () => {
+      enterWaitingCalls += 1;
+      return Promise.resolve();
+    },
+    heartbeat: (deltaMs) => {
+      heartbeatDeltas.push(deltaMs);
+      return Promise.resolve();
+    },
+  };
+}
 
 function makeStep(input: Record<string, unknown>): StepInstance {
   return {
@@ -53,7 +79,7 @@ describe("waitAuthorPush executor", () => {
       now: () => 1000,
     });
 
-    const result = await exec(step);
+    const result = await exec(step, makeRuntime());
 
     expect(result.output).toEqual({ pushed: true, newCommitShas: ["abc123"] });
     expect(listCommitDates).toHaveBeenCalledTimes(1);
@@ -93,7 +119,7 @@ describe("waitAuthorPush executor", () => {
       timeoutMs: 10000,
     });
 
-    const result = await exec(step);
+    const result = await exec(step, makeRuntime());
 
     expect(result.output).toEqual({ pushed: true, newCommitShas: ["new"] });
     expect(listCommitDates).toHaveBeenCalledTimes(2);
@@ -126,7 +152,7 @@ describe("waitAuthorPush executor", () => {
       timeoutMs: 2500,
     });
 
-    const result = await exec(step);
+    const result = await exec(step, makeRuntime());
 
     expect(result.output).toEqual({ pushed: false, reason: "timeout" });
     expect(listCommitDates).toHaveBeenCalledTimes(4);
@@ -158,7 +184,7 @@ describe("waitAuthorPush executor", () => {
       sinceReviewSubmittedAt: "2026-01-01T00:00:01.000Z",
     });
 
-    const result = await exec(step);
+    const result = await exec(step, makeRuntime());
 
     expect(result.output).toEqual({
       pushed: true,
@@ -167,6 +193,38 @@ describe("waitAuthorPush executor", () => {
     expect(sleep).toHaveBeenCalledWith(
       DEFAULT_WAIT_AUTHOR_PUSH_POLL_INTERVAL_MS,
     );
+  });
+
+  it("enters waiting once and heartbeats each idle poll via the runtime", async () => {
+    const listCommitDates = vi
+      .fn<(pr: number) => Promise<string[]>>()
+      .mockResolvedValue(["2026-01-01T00:00:00.000Z"]);
+    const listCommitSummaries = vi
+      .fn<(pr: number) => Promise<{ sha: string; committedDate: string }[]>>()
+      .mockResolvedValue([]);
+    let nowMs = 0;
+    const sleep = vi.fn<(ms: number) => Promise<void>>((ms) => {
+      nowMs += ms;
+      return Promise.resolve();
+    });
+    const exec = createWaitAuthorPushExecutor({
+      listCommitDates,
+      listCommitSummaries,
+      sleep,
+      now: () => nowMs,
+    });
+    const step = makeStep({
+      pr: 42,
+      sinceReviewSubmittedAt: "2026-01-01T00:00:00.000Z",
+      pollIntervalMs: 1000,
+      timeoutMs: 2500,
+    });
+    const runtime = makeRuntime();
+
+    await exec(step, runtime);
+
+    expect(runtime.enterWaitingCalls).toBe(1);
+    expect(runtime.heartbeatDeltas).toEqual([1000, 1000, 1000]);
   });
 
   it("rejects invalid input schema", async () => {
@@ -183,7 +241,7 @@ describe("waitAuthorPush executor", () => {
       pollIntervalMs: -1,
     });
 
-    await expect(exec(step)).rejects.toThrow();
+    await expect(exec(step, makeRuntime())).rejects.toThrow();
   });
 
   it("exports defaults matching issue requirements", () => {

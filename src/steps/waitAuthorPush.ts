@@ -1,7 +1,7 @@
 import { execFile } from "node:child_process";
 import { promisify } from "node:util";
 import type { StepInstance } from "@/db/schemas";
-import type { StepExecutor } from "@/engine/runner";
+import type { StepExecutor, StepExecutorRuntime } from "@/engine/runner";
 import { z } from "zod";
 
 const execFileAsync = promisify(execFile);
@@ -85,7 +85,7 @@ export function createWaitAuthorPushExecutor(
   const now = deps.now ?? Date.now;
   const sleep = deps.sleep ?? defaultSleep;
 
-  return async (step: StepInstance) => {
+  return async (step: StepInstance, runtime: StepExecutorRuntime) => {
     const input = WaitAuthorPushInputSchema.parse(step.input);
     const startedAt = now();
     const timeoutMs = input.timeoutMs ?? DEFAULT_WAIT_AUTHOR_PUSH_TIMEOUT_MS;
@@ -94,20 +94,16 @@ export function createWaitAuthorPushExecutor(
     const timeoutAt = startedAt + timeoutMs;
     const sinceMs = Date.parse(input.sinceReviewSubmittedAt);
 
-    // Wait steps conceptually transition `running → waiting` and need to
-    // refresh `heartbeatAt` once per poll so the heartbeat monitor sees
-    // them as live. Under the current `StepExecutor` contract from #56,
-    // however, executors only return an `ExecutorResult` — they cannot
-    // persist intermediate lifecycle state. The proper plumbing for
-    // `enterWaiting()` and `heartbeat()` is tracked in #78; until that
-    // contract lands, this poll loop only returns the terminal output
-    // and the runner's terminal `Db.update` is the single persistence
-    // point.
+    // The step transitions `running → waiting` for the duration of the poll
+    // loop so it does not hold a global Claude slot, and refreshes its
+    // heartbeat each idle poll so the heartbeat monitor (#58) sees it as
+    // live rather than dead. Both are persisted through the runner-provided
+    // runtime handle (#78).
+    await runtime.enterWaiting();
 
     for (;;) {
       const committedDates = await listCommitDates(input.pr);
       const hasNewCommit = committedDates.some((d) => isAfter(d, sinceMs));
-      const heartbeatAt = now();
 
       if (hasNewCommit) {
         const summaries = await listCommitSummaries(input.pr);
@@ -122,7 +118,7 @@ export function createWaitAuthorPushExecutor(
         };
       }
 
-      if (heartbeatAt > timeoutAt) {
+      if (now() > timeoutAt) {
         return {
           output: {
             pushed: false,
@@ -132,6 +128,9 @@ export function createWaitAuthorPushExecutor(
       }
 
       await sleep(pollIntervalMs);
+      // Account the idle poll as external wait time and refresh the
+      // heartbeat so a long wait is not misclassified as a dead step.
+      await runtime.heartbeat(pollIntervalMs);
     }
   };
 }

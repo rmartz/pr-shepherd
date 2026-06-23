@@ -15,6 +15,7 @@ import {
   type GithubReadTransport,
 } from "@/engine/derivation";
 import { createRunner } from "@/engine/runner";
+import { makeNoopRuntime } from "@/engine/runner/runner-tests/fixtures";
 import { createDerivePrStateExecutor } from "./derivePrState";
 
 // ---------------------------------------------------------------------------
@@ -165,7 +166,7 @@ describe("createDerivePrStateExecutor returns the derived axis vector as output.
     const transport = makeTransport();
 
     const executor = createDerivePrStateExecutor({ db, transport });
-    const result = await executor(step);
+    const result = await executor(step, makeNoopRuntime());
 
     expect(result.output["state"]).toMatchObject({
       ci: CIState.Failing,
@@ -179,7 +180,10 @@ describe("createDerivePrStateExecutor returns the derived axis vector as output.
     const step = await seedStep(db);
     const transport = makeTransport();
 
-    await createDerivePrStateExecutor({ db, transport })(step);
+    await createDerivePrStateExecutor({ db, transport })(
+      step,
+      makeNoopRuntime(),
+    );
 
     expect(transport.graphql).toHaveBeenCalledWith(expect.any(String), {
       owner: "rmartz",
@@ -215,7 +219,10 @@ describe("createDerivePrStateExecutor is read-only", () => {
     const step = await seedStep(db);
     const transport = makeTransport();
 
-    await createDerivePrStateExecutor({ db, transport })(step);
+    await createDerivePrStateExecutor({ db, transport })(
+      step,
+      makeNoopRuntime(),
+    );
 
     // The injected transport exposes only `graphql` + `restPaginate` (reads).
     // restPaginate is called for reviews/comments; no write-shaped call exists.
@@ -234,7 +241,7 @@ describe("createDerivePrStateExecutor surfaces a missing run", () => {
     const transport = makeTransport();
 
     await expect(
-      createDerivePrStateExecutor({ db, transport })(step),
+      createDerivePrStateExecutor({ db, transport })(step, makeNoopRuntime()),
     ).rejects.toThrow("ghost-run");
   });
 });
