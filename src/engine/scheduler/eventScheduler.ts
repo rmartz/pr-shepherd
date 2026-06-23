@@ -1,6 +1,7 @@
 import { Collections } from "@/db/collections";
 import { StepStatus } from "@/db/schemas";
 import type { Db, Unsubscribe } from "@/db/types";
+import { monitorHeartbeats, type HeartbeatFailure } from "./heartbeat";
 import { runSchedulerTick, type SchedulerConfig } from "./loop";
 import type { SchedulerTickReport } from "./loop";
 
@@ -22,6 +23,13 @@ import type { SchedulerTickReport } from "./loop";
 // Triggers are debounced so an event storm collapses to a single tick rather
 // than one tick per event, and a trigger arriving while a tick is in flight
 // is coalesced into one follow-up tick instead of racing it.
+//
+// Dead-step recovery (vision §4.2) rides the reconciliation poll: each poll
+// fire runs `monitorHeartbeats` to reap `running` steps whose `heartbeatAt`
+// has gone stale. Heartbeat detection is time-based, not admission-triggered,
+// so it belongs on the low-frequency safety-net cadence — never on the
+// debounced admission trigger path. It runs independently of the admission
+// tick so a Db hiccup in one cannot suppress the other.
 // ---------------------------------------------------------------------------
 
 // A trigger source wires a single Db subscription to the scheduler's trigger
@@ -75,6 +83,11 @@ export interface StartSchedulerOptions {
   triggers?: TriggerSubscription[];
   onTick?: (report: SchedulerTickReport | undefined) => void;
   onTickError?: (err: unknown) => void;
+  // Fires after each reconcile-poll heartbeat sweep with the steps it reaped.
+  onHeartbeat?: (failures: HeartbeatFailure[]) => void;
+  // Receives any error thrown by the heartbeat sweep so a Db hiccup there does
+  // not crash the daemon.
+  onHeartbeatError?: (err: unknown) => void;
   timers?: SchedulerTimers;
 }
 
@@ -102,6 +115,7 @@ export function startScheduler(
   let debounceHandle: unknown;
   let reconcileHandle: unknown;
   let inFlight: Promise<void> = Promise.resolve();
+  let heartbeatInFlight: Promise<void> = Promise.resolve();
 
   // One admission pass; a thrown tick (Db hiccup) or onTick hook must not crash
   // the daemon, so failures are surfaced to the handler and swallowed.
@@ -110,6 +124,21 @@ export function startScheduler(
       options.onTick?.(await runSchedulerTick(db, config));
     } catch (err) {
       options.onTickError?.(err);
+    }
+  };
+
+  // One heartbeat sweep, driven off the reconciliation poll. Reaps `running`
+  // steps whose heartbeat has gone stale; a throw (Db hiccup) is surfaced and
+  // swallowed so it cannot crash the daemon or suppress the admission tick.
+  const runHeartbeatSweep = async (): Promise<void> => {
+    try {
+      const failures = await monitorHeartbeats(db, {
+        poll: { heartbeatIntervalSeconds: config.heartbeat.intervalSeconds },
+        heartbeatTimeoutSeconds: config.heartbeat.timeoutSeconds,
+      });
+      options.onHeartbeat?.(failures);
+    } catch (err) {
+      options.onHeartbeatError?.(err);
     }
   };
 
@@ -150,10 +179,13 @@ export function startScheduler(
 
   // Reconciliation poll: a self-re-arming one-shot that ticks regardless of
   // whether any event fired, covering dropped listener events and crash gaps.
+  // It also drives the heartbeat sweep — dead-step recovery is a safety-net
+  // concern on the same low-frequency cadence, kept off the admission tick path.
   const scheduleReconcile = (): void => {
     reconcileHandle = timers.setTimer(() => {
       if (!running) return;
       fireTick();
+      heartbeatInFlight = runHeartbeatSweep();
       scheduleReconcile();
     }, options.reconcileIntervalMs);
   };
@@ -167,7 +199,7 @@ export function startScheduler(
       if (debounceHandle !== undefined) timers.clearTimer(debounceHandle);
       if (reconcileHandle !== undefined) timers.clearTimer(reconcileHandle);
       for (const unsubscribe of unsubscribes) unsubscribe();
-      await inFlight;
+      await Promise.all([inFlight, heartbeatInFlight]);
     },
   };
 }

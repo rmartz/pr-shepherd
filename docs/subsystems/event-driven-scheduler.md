@@ -22,6 +22,12 @@ The tick re-derives concurrency counts fresh on every run (it holds no long-live
 - **Debounce / coalescing** — a trigger resets a short debounce timer, so an event storm collapses to a single tick rather than one tick per event. A trigger that arrives while a tick is already in flight is coalesced into exactly one follow-up tick; two ticks never run concurrently, which is what keeps the fresh-count derivation race-free.
 - **Reconciliation poll** — a self-re-arming low-frequency timer ticks regardless of whether any event fired. Kept far below the old fixed cadence (push handles latency now), it exists only to cover missed or dropped listener events and crash windows — the "fail open" invariant.
 
+## Dead-step recovery (heartbeat monitor)
+
+Each reconciliation-poll fire also runs [`monitorHeartbeats`](../../src/engine/scheduler/heartbeat.ts): it lists `running` step instances and reaps any whose `heartbeatAt` has gone stale (older than `heartbeat.timeoutSeconds`, defaulting to `heartbeat.intervalSeconds * 4`), marking them `failed` and — when under the retry budget — enqueuing a fresh `pending` retry. This is how a step whose runner crashed without a clean status transition is recovered (vision §4.2, dead-step detection).
+
+Heartbeat detection is **time-based, not admission-triggered**, so it deliberately rides the low-frequency reconciliation poll rather than the debounced admission trigger path — a burst of new pending work must not provoke a heartbeat sweep, and a quiet daemon must still reap dead steps. The sweep runs independently of the admission tick (its own error handler, `onHeartbeatError`), so a Db hiccup in one cannot suppress the other. `heartbeat` config lives on `SchedulerConfig`; the bootstrap maps it from `poll.heartbeatIntervalSeconds`.
+
 ## Shutdown
 
 `stop()` flips the running flag, cancels the pending debounce and reconcile timers, detaches every subscription, and awaits the in-flight tick so it drains before resolving. It composes with [graceful shutdown](graceful-shutdown.md), which bounds the overall drain.

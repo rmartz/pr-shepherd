@@ -46,7 +46,12 @@ function resolveDeps(overrides: Partial<BootstrapDeps> = {}): BootstrapDeps {
     startScheduler: (db, config) =>
       startScheduler(
         db,
-        { concurrency: config.concurrency },
+        {
+          concurrency: config.concurrency,
+          heartbeat: {
+            intervalSeconds: config.poll.heartbeatIntervalSeconds,
+          },
+        },
         { reconcileIntervalMs: config.poll.reconcileIntervalSeconds * 1000 },
       ),
     startCommandListener: (db, config) =>
