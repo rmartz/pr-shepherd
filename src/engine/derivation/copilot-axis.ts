@@ -24,7 +24,7 @@ export function isCopilotActor(actor: string | undefined): boolean {
   return actor?.toLowerCase().includes("copilot") ?? false;
 }
 
-function isRefusal(body: string): boolean {
+export function isCopilotRefusal(body: string): boolean {
   const lower = body.toLowerCase();
   return REFUSAL_MARKERS.some((marker) => lower.includes(marker));
 }
@@ -33,7 +33,7 @@ function isRefusal(body: string): boolean {
 // is not a refusal notice, or any Copilot-authored review thread.
 function hasActualCopilotReview(snapshot: PrSnapshot): boolean {
   const reviewed = snapshot.reviews.some(
-    (r) => isCopilotActor(r.author) && !isRefusal(r.body),
+    (r) => isCopilotActor(r.author) && !isCopilotRefusal(r.body),
   );
   const threaded = snapshot.reviewThreads.some((t) =>
     isCopilotActor(t.firstCommentAuthor),

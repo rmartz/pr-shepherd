@@ -16,6 +16,7 @@ export type {
   IssueCommentSnapshot,
 } from "./types";
 export { derivePrState } from "./axes";
+export { isCopilotActor, isCopilotRefusal } from "./copilot-axis";
 export {
   Activity,
   CIState,
