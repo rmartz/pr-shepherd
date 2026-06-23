@@ -49,3 +49,18 @@ export enum StepType {
   WaitAuthorPush = "wait_author_push",
   WaitExternal = "wait_external",
 }
+
+// The GitHub webhook event types the receiver subscribes to (#111). The
+// string values are the `X-GitHub-Event` header values GitHub sends; a
+// delivery whose event type is not in this enum is not subscribed and is
+// rejected by the receiver before persistence. Alphabetized by value.
+export enum WebhookEventType {
+  CheckRun = "check_run",
+  CheckSuite = "check_suite",
+  IssueComment = "issue_comment",
+  PullRequest = "pull_request",
+  PullRequestReview = "pull_request_review",
+  PullRequestReviewThread = "pull_request_review_thread",
+  Push = "push",
+  Status = "status",
+}
