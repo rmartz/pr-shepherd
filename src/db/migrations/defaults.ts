@@ -3,6 +3,7 @@ import type { MigrationsByCollection } from "./index";
 import { commandsMigrations } from "./commands";
 import { repositoriesMigrations } from "./repositories";
 import { stepInstancesMigrations } from "./stepInstances";
+import { webhookEventsMigrations } from "./webhookEvents";
 import { workflowDefinitionsMigrations } from "./workflowDefinitions";
 import { workflowRunsMigrations } from "./workflowRuns";
 
@@ -16,6 +17,7 @@ export const defaultMigrations: MigrationsByCollection = {
   [Collections.commands.name]: commandsMigrations,
   [Collections.repositories.name]: repositoriesMigrations,
   [Collections.stepInstances.name]: stepInstancesMigrations,
+  [Collections.webhookEvents.name]: webhookEventsMigrations,
   [Collections.workflowDefinitions.name]: workflowDefinitionsMigrations,
   [Collections.workflowRuns.name]: workflowRunsMigrations,
 };
