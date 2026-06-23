@@ -21,6 +21,24 @@ export enum CommandType {
   ResumeRun = "resume_run",
 }
 
+// Lifecycle phase a single audit event records (#109 self-observability).
+// One run produces many events as its steps move through these phases.
+// Kept distinct from `StepStatus` because the event stream is an
+// append-only audit log with its own, coarser taxonomy: a step's many
+// status transitions collapse into the handful of events worth auditing.
+// Alphabetical order.
+export enum EventType {
+  MergeCompleted = "merge_completed",
+  MergeFailed = "merge_failed",
+  RunBlocked = "run_blocked",
+  RunCompleted = "run_completed",
+  RunStarted = "run_started",
+  StepCompleted = "step_completed",
+  StepFailed = "step_failed",
+  StepRetried = "step_retried",
+  StepStarted = "step_started",
+}
+
 export enum RunStatus {
   Cancelled = "cancelled",
   Completed = "completed",
