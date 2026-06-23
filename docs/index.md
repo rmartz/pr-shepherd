@@ -54,3 +54,4 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 
 - [Local Development](local-development.md) — running the daemon against the Firebase Emulator.
 - [shepherd CLI](reference/shepherd-cli.md) — the headless daemon's commander entrypoint: start, status, force-retry, inspect.
+- [PM2 ecosystem (optional)](reference/pm2-ecosystem.md) — optional PM2 process file supervising `shepherd start` with auto-restart and exponential backoff.
