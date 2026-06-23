@@ -30,6 +30,8 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [Gate Model](subsystems/gate-model.md) — the total decision: a state vector walks an ordered gate table to one action.
 - [Merge Serialization](subsystems/merge-serialization.md) — a single global merge path: one merge in flight at a time, idempotent on `(pr, headSha)`, with pre-merge re-validation splitting CI-running (defer) from CI-failed (fix).
 - [Atomic-Task Guards](subsystems/atomic-task-guards.md) — pure cross-cutting guards (one-shot rerun, settle window, idempotency keys, verdict-label heal) that make atomic tasks safe to re-run.
+- [Circuit Breakers](subsystems/circuit-breakers.md) — two queue-halting safety gates: CI-budget-exhausted (halt dispatch when the runner can't validate work) and main-broken (quarantine all but the fix-main PR when `main` is red).
+- [Convergence & Loop Detection](subsystems/convergence.md) — catches non-converging fix→review loops without a hard round cap: a same-action-spin detector plus a durable-review-count cadence that escalates only flappers.
 - [Commands Listener](subsystems/commands-listener.md) — the operator → daemon control plane: applies UI-issued pause / resume / force-retry commands to runs and steps, idempotently.
 - [Engine Bootstrap](subsystems/engine-bootstrap.md) — the `shepherd start` boot sequence: config → admin Firestore → crash recovery → scheduler + commands listener → initial self-discovery, wired through injectable seams.
 - [Event-Driven Scheduler](subsystems/event-driven-scheduler.md) — the scheduler ticks the instant state changes (debounced/coalesced) via Firestore subscriptions, with a low-frequency reconciliation poll as the fail-open safety net; events are a trigger, never a source of truth.
