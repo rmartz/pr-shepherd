@@ -30,6 +30,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [Gate Model](subsystems/gate-model.md) — the total decision: a state vector walks an ordered gate table to one action.
 - [Merge Serialization](subsystems/merge-serialization.md) — a single global merge path: one merge in flight at a time, idempotent on `(pr, headSha)`, with pre-merge re-validation splitting CI-running (defer) from CI-failed (fix).
 - [Atomic-Task Guards](subsystems/atomic-task-guards.md) — pure cross-cutting guards (one-shot rerun, settle window, idempotency keys, verdict-label heal) that make atomic tasks safe to re-run.
+- [Circuit Breakers](subsystems/circuit-breakers.md) — two queue-halting safety gates: CI-budget-exhausted (halt dispatch when the runner can't validate work) and main-broken (quarantine all but the fix-main PR when `main` is red).
 - [Commands Listener](subsystems/commands-listener.md) — the operator → daemon control plane: applies UI-issued pause / resume / force-retry commands to runs and steps, idempotently.
 - [Engine Bootstrap](subsystems/engine-bootstrap.md) — the `shepherd start` boot sequence: config → admin Firestore → crash recovery → scheduler + commands listener → initial self-discovery, wired through injectable seams.
 - [Graceful Shutdown](subsystems/graceful-shutdown.md) — SIGTERM/SIGINT halt the scheduler, drain in-flight steps within a bounded grace period, tear the daemon down, and exit (non-zero if the grace elapses) — never hanging.
