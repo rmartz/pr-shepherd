@@ -72,6 +72,11 @@ export enum StepType {
 // string values are the `X-GitHub-Event` header values GitHub sends; a
 // delivery whose event type is not in this enum is not subscribed and is
 // rejected by the receiver before persistence. Alphabetized by value.
+//
+// `status` (legacy commit status) is intentionally omitted: GitHub's status
+// payload carries no `pull_requests` array, so extraction via PR number is
+// impossible without a branch→PR resolution step. `check_run` and
+// `check_suite` cover the same signals for all modern CI integrations.
 export enum WebhookEventType {
   CheckRun = "check_run",
   CheckSuite = "check_suite",
@@ -80,5 +85,4 @@ export enum WebhookEventType {
   PullRequestReview = "pull_request_review",
   PullRequestReviewThread = "pull_request_review_thread",
   Push = "push",
-  Status = "status",
 }
