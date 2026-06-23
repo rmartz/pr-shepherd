@@ -19,7 +19,7 @@ The event → derivation trigger is the second half of Epic 12's webhook pipelin
    | Event                                                               | PR named by                                                            |
    | ------------------------------------------------------------------- | ---------------------------------------------------------------------- |
    | `pull_request`, `pull_request_review`, `pull_request_review_thread` | `pull_request.number` (or top-level `number`)                          |
-   | `check_run`, `check_suite`, `status`                                | `pull_requests[].number` (one commit can span several PRs)             |
+   | `check_run`, `check_suite`                                          | `pull_requests[].number` (one commit can span several PRs)             |
    | `issue_comment`                                                     | `issue.number` — only when `issue.pull_request` is present             |
    | `push`                                                              | the updated branch in `ref` (a **branch target**, resolved in stage 2) |
 
