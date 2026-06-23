@@ -26,10 +26,11 @@ export interface IssueFiler {
 }
 
 export interface AnalyzeResult {
-  // Distinct anomalies detected, after dedupe.
+  // Distinct anomalies detected, after dedupe. Every detected anomaly is
+  // passed to the filer — `IssueFiler.file()` returns `void`, so it cannot
+  // signal a skip. Callers that need to know what was filed should track
+  // that inside their own `IssueFiler` implementation.
   anomalies: Anomaly[];
-  // The subset that was filed this run (excludes ones the filer skipped).
-  filed: Anomaly[];
 }
 
 // Run the full anomaly sweep over a cohort of runs. `runs` is the set of
@@ -57,12 +58,10 @@ export async function analyzeRuns(
   found.push(...detectMassBlocking(runs, thresholds));
 
   const anomalies = dedupe(found);
-  const filed: Anomaly[] = [];
   for (const anomaly of anomalies) {
     await filer.file(anomaly);
-    filed.push(anomaly);
   }
-  return { anomalies, filed };
+  return { anomalies };
 }
 
 // Convenience wrapper that analyzes every run currently in the store.
