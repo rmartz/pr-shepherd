@@ -9,6 +9,7 @@ import {
   type WorkflowRun,
 } from "@/db/schemas";
 import type { Db } from "@/db/types";
+import { makeNoopRuntime } from "@/engine/runner/runner-tests/fixtures";
 import { createForkExecutor, type FirstStepSpec } from "./fork";
 
 // ---------------------------------------------------------------------------
@@ -114,7 +115,10 @@ describe("forkExecutor creates a child workflowRun and first stepInstance", () =
       firstStepFactory,
       newId: () => `gen-${(nextId++).toString()}`,
     });
-    const result = await exec(makeForkStep({ runId: "run-1" }));
+    const result = await exec(
+      makeForkStep({ runId: "run-1" }),
+      makeNoopRuntime(),
+    );
     expect(result.output).toEqual({ childRunId: "gen-0" });
     const childRun = await db.get(Collections.workflowRuns, "gen-0");
     expect(childRun?.parentRunId).toBe("run-1");
@@ -140,7 +144,7 @@ describe("forkExecutor seeds the child's first stepInstance via the injected fac
       firstStepFactory,
       newId: () => `gen-${(nextId++).toString()}`,
     });
-    await exec(makeForkStep({ runId: "run-1" }));
+    await exec(makeForkStep({ runId: "run-1" }), makeNoopRuntime());
     expect(firstStepFactory).toHaveBeenCalledWith("dependabot-fix");
     const childSteps = await db.list(Collections.stepInstances, {
       runId: "gen-0",
@@ -165,7 +169,7 @@ describe("forkExecutor inherits the parent run's repo onto the child run", () =>
       firstStepFactory: makeFirstStepFactory(),
       newId: () => `gen-${(nextId++).toString()}`,
     });
-    await exec(makeForkStep({ runId: "run-1" }));
+    await exec(makeForkStep({ runId: "run-1" }), makeNoopRuntime());
     const childRun = await db.get(Collections.workflowRuns, "gen-0");
     expect(childRun?.repo).toBe("owner/special-repo");
   });
@@ -182,12 +186,12 @@ describe("forkExecutor at the default cap throws with a descriptive chain", () =
       firstStepFactory: makeFirstStepFactory(),
       newId: () => "should-not-be-created",
     });
-    await expect(exec(makeForkStep({ runId: "leaf" }))).rejects.toThrow(
-      /fork depth cap exceeded/i,
-    );
-    await expect(exec(makeForkStep({ runId: "leaf" }))).rejects.toThrow(
-      /chain-0.*chain-1.*chain-2.*chain-3.*leaf/,
-    );
+    await expect(
+      exec(makeForkStep({ runId: "leaf" }), makeNoopRuntime()),
+    ).rejects.toThrow(/fork depth cap exceeded/i);
+    await expect(
+      exec(makeForkStep({ runId: "leaf" }), makeNoopRuntime()),
+    ).rejects.toThrow(/chain-0.*chain-1.*chain-2.*chain-3.*leaf/);
   });
 });
 
@@ -200,7 +204,10 @@ describe("forkExecutor one level below the default cap succeeds", () => {
       firstStepFactory: makeFirstStepFactory(),
       newId: () => "child-leaf",
     });
-    const result = await exec(makeForkStep({ runId: "leaf" }));
+    const result = await exec(
+      makeForkStep({ runId: "leaf" }),
+      makeNoopRuntime(),
+    );
     expect(result.output).toEqual({ childRunId: "child-leaf" });
   });
 });
@@ -215,9 +222,9 @@ describe("forkExecutor honours a custom maxDepth", () => {
       newId: () => "blocked",
       maxDepth: 2,
     });
-    await expect(exec(makeForkStep({ runId: "leaf" }))).rejects.toThrow(
-      /fork depth cap exceeded/i,
-    );
+    await expect(
+      exec(makeForkStep({ runId: "leaf" }), makeNoopRuntime()),
+    ).rejects.toThrow(/fork depth cap exceeded/i);
   });
 });
 
@@ -239,6 +246,7 @@ describe("forkExecutor initialContext from input populates child context", () =>
           initialContext: { seeded: "yes", count: 3 },
         },
       }),
+      makeNoopRuntime(),
     );
     const childRun = await db.get(Collections.workflowRuns, "gen-0");
     expect(childRun?.context).toEqual({ seeded: "yes", count: 3 });
@@ -273,9 +281,9 @@ describe("forkExecutor throws when the chain contains a cycle", () => {
       firstStepFactory: makeFirstStepFactory(),
       newId: () => "ignored",
     });
-    await expect(exec(makeForkStep({ runId: "run-a" }))).rejects.toThrow(
-      /cycle detected/i,
-    );
+    await expect(
+      exec(makeForkStep({ runId: "run-a" }), makeNoopRuntime()),
+    ).rejects.toThrow(/cycle detected/i);
   });
 });
 
@@ -293,8 +301,8 @@ describe("forkExecutor throws when the chain references a missing parent run", (
       firstStepFactory: makeFirstStepFactory(),
       newId: () => "ignored",
     });
-    await expect(exec(makeForkStep({ runId: "run-leaf" }))).rejects.toThrow(
-      /missing parent run run-ghost/,
-    );
+    await expect(
+      exec(makeForkStep({ runId: "run-leaf" }), makeNoopRuntime()),
+    ).rejects.toThrow(/missing parent run run-ghost/);
   });
 });

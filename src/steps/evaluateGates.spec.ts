@@ -28,6 +28,7 @@ import {
   type ConcurrencyConfig,
 } from "@/engine/scheduler/concurrency";
 import { createRunner } from "@/engine/runner";
+import { makeNoopRuntime } from "@/engine/runner/runner-tests/fixtures";
 import { evaluateGatesExecutor } from "./evaluateGates";
 
 // ---------------------------------------------------------------------------
@@ -109,6 +110,7 @@ describe("evaluateGatesExecutor emits the action decide() returns", () => {
     const state = makePrStateVector({ review: ReviewState.Unreviewed });
     const result = await evaluateGatesExecutor(
       makeEvaluateGatesStep({ state }),
+      makeNoopRuntime(),
     );
     expect(result.output).toEqual({
       action: Action.Review,
@@ -120,6 +122,7 @@ describe("evaluateGatesExecutor emits the action decide() returns", () => {
     const state = makePrStateVector({ ci: CIState.Running });
     const result = await evaluateGatesExecutor(
       makeEvaluateGatesStep({ state }),
+      makeNoopRuntime(),
     );
     expect(result.output).toEqual({
       action: Action.WaitCi,
@@ -131,6 +134,7 @@ describe("evaluateGatesExecutor emits the action decide() returns", () => {
     const state = makePrStateVector();
     const result = await evaluateGatesExecutor(
       makeEvaluateGatesStep({ state }),
+      makeNoopRuntime(),
     );
     expect(result.output).toEqual({
       action: Action.Merge,
@@ -149,6 +153,7 @@ describe("evaluateGatesExecutor honors decide options", () => {
     });
     const result = await evaluateGatesExecutor(
       makeEvaluateGatesStep({ state, options: { skipUat: true } }),
+      makeNoopRuntime(),
     );
     expect(result.output).toEqual({
       action: Action.Merge,
@@ -210,6 +215,8 @@ describe("evaluateGatesExecutor never consumes a concurrency slot", () => {
 
 describe("evaluateGatesExecutor rejects malformed input", () => {
   it("throws when the state vector is missing", () => {
-    expect(() => evaluateGatesExecutor(makeEvaluateGatesStep({}))).toThrow();
+    expect(() =>
+      evaluateGatesExecutor(makeEvaluateGatesStep({}), makeNoopRuntime()),
+    ).toThrow();
   });
 });

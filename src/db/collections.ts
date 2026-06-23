@@ -1,5 +1,6 @@
 import {
   CommandSchema,
+  EventRecordSchema,
   MetaDocSchema,
   RepositorySchema,
   WebhookEventSchema,
@@ -7,6 +8,7 @@ import {
   StepInstanceSchema,
   WorkflowDefinitionSchema,
   type Command,
+  type EventRecord,
   type MetaDoc,
   type Repository,
   type WebhookEvent,
@@ -30,6 +32,11 @@ export const Collections = {
     schema: CommandSchema,
     idField: "id",
   } satisfies CollectionDef<Command>,
+  eventStream: {
+    name: "eventStream",
+    schema: EventRecordSchema,
+    idField: "id",
+  } satisfies CollectionDef<EventRecord>,
   meta: {
     name: "_meta",
     schema: MetaDocSchema,

@@ -11,6 +11,7 @@ import {
 } from "@/db/schemas";
 import type { Db } from "@/db/types";
 import { createRunner } from "@/engine/runner";
+import { makeNoopRuntime } from "@/engine/runner/runner-tests/fixtures";
 import {
   createClaudeSkillExecutor,
   scrubGithubEnv,
@@ -125,7 +126,7 @@ describe("claudeSkillExecutor returns parsed output on a clean exit", () => {
     const fake = makeFakeChild();
     const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
     const step = await db.get(Collections.stepInstances, "s1");
-    const promise = exec(step!);
+    const promise = exec(step!, makeNoopRuntime());
     fake.emitOut(JSON.stringify({ verdict: "approved", body: "lgtm" }));
     fake.emitClose(0);
     const result = await promise;
@@ -192,7 +193,7 @@ describe("claudeSkillExecutor heartbeats while the subprocess runs", () => {
         heartbeatIntervalMs: 10,
       });
       const step = await db.get(Collections.stepInstances, "s1");
-      const promise = exec(step!);
+      const promise = exec(step!, makeNoopRuntime());
       clock = 10;
       await vi.advanceTimersByTimeAsync(10);
       clock = 20;
@@ -216,7 +217,7 @@ describe("claudeSkillExecutor fails on a non-zero exit", () => {
     const fake = makeFakeChild();
     const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
     const step = await db.get(Collections.stepInstances, "s1");
-    const promise = exec(step!);
+    const promise = exec(step!, makeNoopRuntime());
     fake.emitErr("boom");
     fake.emitClose(2);
     await expect(promise).rejects.toThrow(
@@ -230,7 +231,7 @@ describe("claudeSkillExecutor fails on a non-zero exit", () => {
     const fake = makeFakeChild();
     const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
     const step = await db.get(Collections.stepInstances, "s1");
-    const promise = exec(step!);
+    const promise = exec(step!, makeNoopRuntime());
     fake.emitErr("x".repeat(300));
     fake.emitClose(1);
     await expect(promise).rejects.toThrow(
@@ -253,7 +254,7 @@ describe("claudeSkillExecutor cancels on the abort signal", () => {
         signal: controller.signal,
       });
       const step = await db.get(Collections.stepInstances, "s1");
-      const promise = exec(step!);
+      const promise = exec(step!, makeNoopRuntime());
       controller.abort();
       expect(fake.kill).toHaveBeenCalledWith("SIGTERM");
       await vi.advanceTimersByTimeAsync(100);
@@ -273,7 +274,7 @@ describe("claudeSkillExecutor streams stdout/stderr into the step logs", () => {
     const fake = makeFakeChild();
     const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
     const step = await db.get(Collections.stepInstances, "s1");
-    const promise = exec(step!);
+    const promise = exec(step!, makeNoopRuntime());
     fake.emitOut("line1\nline2\n");
     fake.emitErr("err1\n");
     fake.emitClose(0);

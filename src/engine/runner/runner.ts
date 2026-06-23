@@ -2,6 +2,7 @@ import { Collections } from "@/db/collections";
 import { StepStatus, type StepInstance, type StepType } from "@/db/schemas";
 import type { Db } from "@/db/types";
 import { applyStepDelta, computeStepMetrics } from "@/engine/metrics/rollup";
+import { createStepExecutorRuntime } from "./runtime";
 import type {
   ExecutorMap,
   Runner,
@@ -21,7 +22,11 @@ import type {
 //      stepType is a hard failure (`failed` with a clear message); it is
 //      never silently dropped because the surrounding orchestrator cannot
 //      route a step it does not understand.
-//   3. Invokes the executor, awaiting its result.
+//   3. Invokes the executor with a per-dispatch `StepExecutorRuntime`
+//      handle (see `createStepExecutorRuntime`), awaiting its result. The
+//      handle lets long-running `wait_*` executors persist a `waiting`
+//      transition and periodic heartbeats mid-execution; the terminal
+//      re-read in `completeStep`/`failStep` picks up whatever it wrote.
 //   4. On success: writes `status: completed`, `output`, and `completedAt`,
 //      then merges the executor's `output` into the parent run's `context`
 //      via a second `Db.update`. The merge is shallow — top-level keys in
@@ -70,9 +75,10 @@ export function createRunner(db: Db, executors: ExecutorMap = {}): Runner {
       return;
     }
 
+    const runtime = createStepExecutorRuntime(db, runningStep);
     let result: ExecutorResult;
     try {
-      result = await executor(runningStep);
+      result = await executor(runningStep, runtime);
     } catch (err) {
       const message = err instanceof Error ? err.message : String(err);
       await failStep(db, runningStep, message);

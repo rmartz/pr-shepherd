@@ -2,9 +2,13 @@ import { homedir } from "node:os";
 import { spawn as nodeSpawn } from "node:child_process";
 import { z } from "zod";
 import { Collections } from "@/db/collections";
-import { StepStatus, type StepInstance } from "@/db/schemas";
+import type { StepInstance } from "@/db/schemas";
 import type { Db } from "@/db/types";
-import type { StepExecutor, ExecutorResult } from "@/engine/runner/types";
+import type {
+  StepExecutor,
+  StepExecutorRuntime,
+  ExecutorResult,
+} from "@/engine/runner/types";
 
 // ---------------------------------------------------------------------------
 // `wait_external` step executor.
@@ -176,34 +180,35 @@ export async function runWaitExternal(
 
 // ---------------------------------------------------------------------------
 // Executor factory. Returns a `StepExecutor` that:
-//   1. Transitions the step running → waiting and records waitingAt.
+//   1. Calls `runtime.enterWaiting()` to persist the running → waiting
+//      transition (and `waitingAt`) — the runner-owned lifecycle handle
+//      (#78), replacing the executor's former direct `Db.update`.
 //   2. Invokes `runWaitExternal`.
-//   3. Records metrics.externalWaitMs.
+//   3. Calls `runtime.heartbeat(elapsed)` to refresh `heartbeatAt` and add
+//      the wall-clock wait to `metrics.externalWaitMs`.
 //   4. On success: returns { output: { passed: true } } so the runner
 //      can transition the step to completed.
-//   5. On failure: pre-writes output: { passed: false, reason } then
-//      throws so the runner's failStep records the error without
-//      overwriting the output we set.
+//   5. On failure: pre-writes output: { passed: false, reason } via `db`
+//      then throws so the runner's failStep records the error without
+//      overwriting the output we set. (Output is the executor's terminal
+//      channel, so it stays a direct write rather than a runtime concern.)
 // ---------------------------------------------------------------------------
 export function createWaitExternalExecutor(
   db: Db,
   opts: WaitExternalOptions = {},
 ): StepExecutor {
-  return async (step: StepInstance): Promise<ExecutorResult> => {
+  return async (
+    step: StepInstance,
+    runtime: StepExecutorRuntime,
+  ): Promise<ExecutorResult> => {
     const input = WaitExternalInputSchema.parse(step.input);
 
     const waitingAt = Date.now();
-    await db.update(Collections.stepInstances, step.id, {
-      status: StepStatus.Waiting,
-      waitingAt,
-    });
+    await runtime.enterWaiting();
 
     const result = await runWaitExternal(input, opts);
 
-    const externalWaitMs = Date.now() - waitingAt;
-    await db.update(Collections.stepInstances, step.id, {
-      metrics: { ...step.metrics, externalWaitMs },
-    });
+    await runtime.heartbeat(Date.now() - waitingAt);
 
     if (!result.passed) {
       // Pre-populate output before throwing. The runner's failStep only
