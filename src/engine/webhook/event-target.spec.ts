@@ -2,11 +2,13 @@ import { describe, it, expect } from "vitest";
 import { WebhookEventType } from "@/db/schemas";
 import { eventToTargets, isBranchTarget } from "./event-target";
 import {
+  makeCheckRunPayload,
   makeCheckSuitePayload,
   makeIssueCommentPayload,
   makePullRequestPayload,
   makePushPayload,
   makeReviewPayload,
+  makeReviewThreadPayload,
   makeWebhookEvent,
   TEST_REPO,
 } from "./webhook-tests/fixtures";
@@ -19,6 +21,15 @@ import {
 // ---------------------------------------------------------------------------
 
 describe("eventToTargets maps each subscribed event type to its affected PR", () => {
+  it("maps a check_run completion to its associated PR number", () => {
+    const event = makeWebhookEvent({
+      eventType: WebhookEventType.CheckRun,
+      payload: makeCheckRunPayload([42]),
+    });
+
+    expect(eventToTargets(event)).toEqual([{ repo: TEST_REPO, prNumber: 42 }]);
+  });
+
   it("maps a check_suite completion to its associated PR number", () => {
     const event = makeWebhookEvent({
       eventType: WebhookEventType.CheckSuite,
@@ -26,6 +37,15 @@ describe("eventToTargets maps each subscribed event type to its affected PR", ()
     });
 
     expect(eventToTargets(event)).toEqual([{ repo: TEST_REPO, prNumber: 42 }]);
+  });
+
+  it("maps a pull_request_review_thread event to its PR number", () => {
+    const event = makeWebhookEvent({
+      eventType: WebhookEventType.PullRequestReviewThread,
+      payload: makeReviewThreadPayload(17),
+    });
+
+    expect(eventToTargets(event)).toEqual([{ repo: TEST_REPO, prNumber: 17 }]);
   });
 
   it("maps a pull_request_review submission to its PR number", () => {

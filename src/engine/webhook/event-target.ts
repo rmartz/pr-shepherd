@@ -113,10 +113,9 @@ function issueCommentTargets(
   return prNumber === undefined ? [] : [{ repo, prNumber }];
 }
 
-// `check_run`, `check_suite`, and `status` carry an array of associated PRs
-// under `<root>.pull_requests` (check events nest the array inside the
-// check object; `status` puts it at the top level). One commit can belong to
-// several PRs, so this can yield multiple targets.
+// `check_run` and `check_suite` carry an array of associated PRs under
+// `<root>.pull_requests`, nested inside the check object. One commit can
+// belong to several PRs, so this can yield multiple targets.
 function checkTargets(
   repo: string,
   payload: Record<string, unknown>,
@@ -169,7 +168,5 @@ export function eventToTargets(event: WebhookEvent): EventTarget[] {
       return pullRequestTargets(repo, payload);
     case WebhookEventType.Push:
       return pushTargets(repo, payload);
-    case WebhookEventType.Status:
-      return checkTargets(repo, payload, "status");
   }
 }

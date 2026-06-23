@@ -129,6 +129,19 @@ export function makeReviewPayload(prNumber = 7): Record<string, unknown> {
   };
 }
 
+export function makeCheckRunPayload(
+  prNumbers: number[] = [7],
+): Record<string, unknown> {
+  return {
+    action: "completed",
+    check_run: {
+      conclusion: "success",
+      pull_requests: prNumbers.map((number) => ({ number })),
+    },
+    repository: { full_name: TEST_REPO },
+  };
+}
+
 export function makeCheckSuitePayload(
   prNumbers: number[] = [7],
 ): Record<string, unknown> {
@@ -138,6 +151,14 @@ export function makeCheckSuitePayload(
       conclusion: "success",
       pull_requests: prNumbers.map((number) => ({ number })),
     },
+    repository: { full_name: TEST_REPO },
+  };
+}
+
+export function makeReviewThreadPayload(prNumber = 7): Record<string, unknown> {
+  return {
+    action: "resolved",
+    pull_request: { number: prNumber },
     repository: { full_name: TEST_REPO },
   };
 }
