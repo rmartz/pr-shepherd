@@ -37,8 +37,20 @@ import {
 // lives in `eventScheduler.ts` (#120).
 // ---------------------------------------------------------------------------
 
+// Heartbeat-monitor cadence and timeout (seconds). `intervalSeconds` is the
+// cadence at which the monitor sweeps for stale `running` steps; the monitor
+// rides the scheduler's reconciliation poll (see `eventScheduler.ts`), so this
+// mirrors `poll.heartbeatIntervalSeconds`. `timeoutSeconds` is the staleness
+// threshold a step's `heartbeatAt` must exceed to be reaped; when omitted the
+// monitor derives `intervalSeconds * 4` (see `monitorHeartbeats`).
+export interface HeartbeatConfig {
+  intervalSeconds: number;
+  timeoutSeconds?: number;
+}
+
 export interface SchedulerConfig {
   concurrency: ConcurrencyConfig;
+  heartbeat: HeartbeatConfig;
 }
 
 export interface AdmittedStep {
