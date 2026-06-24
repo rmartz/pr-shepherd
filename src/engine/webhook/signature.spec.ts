@@ -39,6 +39,32 @@ describe("verifySignature rejects invalid signatures", () => {
   });
 });
 
+describe("verifySignature supports zero-downtime secret rotation", () => {
+  const NEXT_SECRET = "rotated-next-secret";
+
+  it("accepts a body signed with either the new or the previous secret", () => {
+    const signedWithOld = computeSignature(RAW_BODY, TEST_SECRET);
+    const signedWithNew = computeSignature(RAW_BODY, NEXT_SECRET);
+    // During the overlap window the ingress configures [next, current]; a
+    // delivery signed under either secret must be accepted.
+    const accepted = [NEXT_SECRET, TEST_SECRET];
+    expect(verifySignature(RAW_BODY, signedWithOld, accepted)).toBe(true);
+    expect(verifySignature(RAW_BODY, signedWithNew, accepted)).toBe(true);
+  });
+
+  it("rejects a body signed with a secret outside the accepted set", () => {
+    const header = computeSignature(RAW_BODY, "retired-secret");
+    expect(verifySignature(RAW_BODY, header, [NEXT_SECRET, TEST_SECRET])).toBe(
+      false,
+    );
+  });
+
+  it("rejects everything when the accepted set is empty", () => {
+    const header = computeSignature(RAW_BODY, TEST_SECRET);
+    expect(verifySignature(RAW_BODY, header, [])).toBe(false);
+  });
+});
+
 describe("computeSignature format", () => {
   it("prefixes the lowercase hex digest with sha256=", () => {
     expect(computeSignature(RAW_BODY, TEST_SECRET)).toMatch(
