@@ -264,7 +264,6 @@ describe("consumeWebhookEvents tolerates replays and out-of-order deliveries", (
   it("processes deliveries oldest-first regardless of read order", async () => {
     const db = createInMemoryDb();
     await db.create(Collections.workflowRuns, makeWorkflowRun({ id: "run-7" }));
-    const order: number[] = [];
     // Insert newest first to prove the consumer sorts by receivedAt.
     await db.create(
       Collections.webhookEvents,
@@ -291,23 +290,13 @@ describe("consumeWebhookEvents tolerates replays and out-of-order deliveries", (
       makeWorkflowRun({ id: "run-8", prNumber: 8 }),
     );
 
-    await consumeWebhookEvents(
-      makeDeps(db, {
-        newId: uniqueId,
-        now: () => {
-          order.push(idCounter);
-          return 5000;
-        },
-      }),
+    const result = await consumeWebhookEvents(
+      makeDeps(db, { newId: uniqueId }),
       { now: () => 9000 },
     );
 
-    // The older (receivedAt 100) delivery's PR is triggered before the newer.
-    const events = await db.list(Collections.webhookEvents);
-    const olderProcessed = events.find((e) => e.id === "older")?.processedAt;
-    const newerProcessed = events.find((e) => e.id === "newer")?.processedAt;
-    expect(olderProcessed).toBeDefined();
-    expect(newerProcessed).toBeDefined();
+    // Oldest first: PR 8 (receivedAt 100) is triggered before PR 7 (receivedAt 200).
+    expect(result.triggered.map((t) => t.prNumber)).toEqual([8, 7]);
   });
 
   it("ignores a push whose branch resolves to no tracked PR", async () => {
