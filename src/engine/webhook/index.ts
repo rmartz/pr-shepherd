@@ -18,3 +18,8 @@ export {
   type TriggerDerivationsDependencies,
   type TriggerDerivationsResult,
 } from "./derivation-trigger";
+export {
+  consumeWebhookEvents,
+  type ConsumeWebhookEventsOptions,
+  type ConsumeWebhookEventsResult,
+} from "./consume";
