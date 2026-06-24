@@ -6,7 +6,21 @@
 // `snapshot.ts` can map them defensively into the public snapshot shape.
 // ---------------------------------------------------------------------------
 
-export const SNAPSHOT_QUERY = `query PrSnapshot($owner: String!, $name: String!, $number: Int!) {
+// The review-threads connection selection, shared by the main snapshot query
+// and the continuation query that pages past the first 100 threads. `first` +
+// `after` (forward cursor pagination) — never `last: N`, which silently drops
+// every thread beyond the cap (#141).
+const REVIEW_THREADS_SELECTION = `reviewThreads(first: 100, after: $threadCursor) {
+        pageInfo { hasNextPage endCursor }
+        nodes {
+          id
+          isResolved
+          isOutdated
+          comments(first: 1) { nodes { author { login } } }
+        }
+      }`;
+
+export const SNAPSHOT_QUERY = `query PrSnapshot($owner: String!, $name: String!, $number: Int!, $threadCursor: String) {
   repository(owner: $owner, name: $name) {
     pullRequest(number: $number) {
       number
@@ -35,14 +49,17 @@ export const SNAPSHOT_QUERY = `query PrSnapshot($owner: String!, $name: String!,
           }
         }
       }
-      reviewThreads(last: 100) {
-        nodes {
-          id
-          isResolved
-          isOutdated
-          comments(first: 1) { nodes { author { login } } }
-        }
-      }
+      ${REVIEW_THREADS_SELECTION}
+    }
+  }
+}`;
+
+// Continuation query: fetches only the review-threads connection for a given
+// cursor, used to drain pages beyond the first when a PR has >100 threads.
+export const REVIEW_THREADS_QUERY = `query PrReviewThreads($owner: String!, $name: String!, $number: Int!, $threadCursor: String) {
+  repository(owner: $owner, name: $name) {
+    pullRequest(number: $number) {
+      ${REVIEW_THREADS_SELECTION}
     }
   }
 }`;
@@ -51,6 +68,14 @@ export const SNAPSHOT_QUERY = `query PrSnapshot($owner: String!, $name: String!,
 
 export interface GqlConnection<T> {
   nodes?: (T | null)[] | null;
+}
+export interface GqlPageInfo {
+  hasNextPage?: boolean;
+  endCursor?: string | null;
+}
+// A connection that carries forward-pagination cursors (review threads).
+export interface GqlPagedConnection<T> extends GqlConnection<T> {
+  pageInfo?: GqlPageInfo;
 }
 export interface GqlActor {
   login?: string;
@@ -97,7 +122,15 @@ export interface GraphqlResponse {
       labels?: GqlConnection<{ name?: string }>;
       commits?: GqlConnection<GqlCommitNode>;
       headCommit?: GqlConnection<GqlHeadCommitNode>;
-      reviewThreads?: GqlConnection<GqlReviewThread>;
+      reviewThreads?: GqlPagedConnection<GqlReviewThread>;
+    } | null;
+  } | null;
+}
+// Response shape for the review-threads continuation query.
+export interface ReviewThreadsResponse {
+  repository?: {
+    pullRequest?: {
+      reviewThreads?: GqlPagedConnection<GqlReviewThread>;
     } | null;
   } | null;
 }

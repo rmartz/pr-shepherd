@@ -10,18 +10,23 @@ import type {
 } from "./types";
 import type {
   GqlConnection,
+  GqlReviewThread,
   GraphqlResponse,
   RestComment,
   RestReview,
 } from "./snapshot-graphql";
 import { SNAPSHOT_QUERY } from "./snapshot-graphql";
+import { collectReviewThreads } from "./snapshot-review-threads";
 
 // ---------------------------------------------------------------------------
 // PR state snapshot fetcher (Epic 10, #95).
 //
 // One rate-limited GitHub read assembled from:
-//   - a single GraphQL query for metadata, labels, commit OIDs, review
-//     threads, and a HEAD-only CI alias; and
+//   - a single GraphQL query for metadata, labels, commit OIDs, the first
+//     page of review threads, and a HEAD-only CI alias;
+//   - cursor-paginated GraphQL continuation reads draining any review threads
+//     beyond the first 100 (a `last:N` cap silently dropped the rest — #141);
+//     and
 //   - paginated REST for reviews and issue comments (GraphQL `last:N`
 //     silently truncates — fetching these via REST avoids the truncation
 //     that corrupted "Copilot reviewed after approval" / "delegated" flags).
@@ -121,16 +126,21 @@ async function runFetch(
   const retries = options.rateLimitRetries ?? DEFAULT_RATE_LIMIT_RETRIES;
   const backoffMs = options.backoffMs ?? DEFAULT_BACKOFF_MS;
 
-  const data = await withRateLimitRetry(
-    () =>
-      transport.graphql<GraphqlResponse>(SNAPSHOT_QUERY, {
-        owner: target.owner,
-        name: target.repo,
-        number: target.prNumber,
-      }),
-    retries,
-    backoffMs,
-    sleep,
+  const retryGraphql = <T>(fn: () => Promise<T>) =>
+    withRateLimitRetry(fn, retries, backoffMs, sleep);
+
+  const data = await retryGraphql(() =>
+    transport.graphql<GraphqlResponse>(SNAPSHOT_QUERY, {
+      owner: target.owner,
+      name: target.repo,
+      number: target.prNumber,
+    }),
+  );
+  const reviewThreadNodes = await collectReviewThreads(
+    transport,
+    target,
+    data.repository?.pullRequest?.reviewThreads,
+    retryGraphql,
   );
   const reviewsRaw = await withRateLimitRetry(
     () =>
@@ -153,7 +163,14 @@ async function runFetch(
     sleep,
   );
 
-  return mapSnapshot(target, data, reviewsRaw, commentsRaw, now());
+  return mapSnapshot(
+    target,
+    data,
+    reviewThreadNodes,
+    reviewsRaw,
+    commentsRaw,
+    now(),
+  );
 }
 
 async function withRateLimitRetry<T>(
@@ -190,6 +207,7 @@ function nodesOf<T>(connection: GqlConnection<T> | undefined): T[] {
 function mapSnapshot(
   target: PrSnapshotTarget,
   data: GraphqlResponse,
+  reviewThreadNodes: (GqlReviewThread | null)[],
   reviewsRaw: RestReview[],
   commentsRaw: RestComment[],
   fetchedAt: number,
@@ -213,14 +231,14 @@ function mapSnapshot(
     description: c.description ?? undefined,
     targetUrl: c.targetUrl ?? undefined,
   }));
-  const reviewThreads: ReviewThreadSnapshot[] = nodesOf(pr?.reviewThreads).map(
-    (t) => ({
+  const reviewThreads: ReviewThreadSnapshot[] = reviewThreadNodes
+    .filter((t): t is GqlReviewThread => t != null)
+    .map((t) => ({
       id: t.id ?? "",
       isResolved: t.isResolved ?? false,
       isOutdated: t.isOutdated ?? false,
       firstCommentAuthor: nodesOf(t.comments)[0]?.author?.login ?? undefined,
-    }),
-  );
+    }));
   const reviews: ReviewSnapshot[] = reviewsRaw.map((r) => ({
     id: r.id ?? 0,
     author: r.user?.login ?? undefined,
