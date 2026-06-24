@@ -53,6 +53,10 @@ const OPTS_COMBINATIONS: DecideOptions[] = [
 ];
 
 describe("decide() is total over the full axis product", () => {
+  // 165 888 evaluations. The default 5 s vitest timeout is insufficient on slow
+  // CI runners (observed: 5 031–5 034 ms). 10 s gives headroom without masking
+  // a genuine hang — the loop finishes in ~1.5 s locally and ~5 s on the
+  // slowest observed runner.
   it("returns exactly one defined Action for every combination and never throws", () => {
     let count = 0;
     for (const state of allStateVectors()) {
@@ -66,7 +70,7 @@ describe("decide() is total over the full axis product", () => {
     // 6 ci × 3 conflict × 4 copilot × 6 hold × 4 review × 2 threads × 4 uat ×
     // 3 activity = 41 472 vectors × 4 opts = 165 888 evaluations.
     expect(count).toBe(165_888);
-  });
+  }, 10_000);
 
   it("never reads the observational activity axis", () => {
     for (const ci of AXIS_VALUES.ci) {
