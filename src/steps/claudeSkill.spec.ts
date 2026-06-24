@@ -134,6 +134,50 @@ describe("claudeSkillExecutor returns parsed output on a clean exit", () => {
   });
 });
 
+describe("claudeSkillExecutor tolerates CLI preamble before the JSON", () => {
+  it("parses the final JSON-object line after progress noise", async () => {
+    const db = createInMemoryDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitOut("Loading skill...\nAnalyzing...\n");
+    fake.emitOut(JSON.stringify({ verdict: "approved" }) + "\n");
+    fake.emitClose(0);
+    const result = await promise;
+    expect(result.output).toEqual({ verdict: "approved" });
+  });
+});
+
+describe("claudeSkillExecutor fails loudly on unparseable stdout", () => {
+  it("rejects when a clean exit emits no JSON object", async () => {
+    const db = createInMemoryDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitOut("progress text with no JSON at all");
+    fake.emitClose(0);
+    await expect(promise).rejects.toThrow("no parseable JSON object");
+  });
+
+  it("still persists streamed logs before rejecting", async () => {
+    const db = createInMemoryDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitOut("noise line\n");
+    fake.emitClose(0);
+    await expect(promise).rejects.toThrow();
+    const final = await db.get(Collections.stepInstances, "s1");
+    expect(final?.logs).toEqual(["noise line"]);
+  });
+});
+
 describe("claudeSkillExecutor scrubs GitHub credentials from the subprocess env", () => {
   it("removes GITHUB_TOKEN / GH_TOKEN / *MCP*GITHUB* (verified via a real printenv child)", () => {
     const env = scrubGithubEnv({
@@ -275,12 +319,16 @@ describe("claudeSkillExecutor streams stdout/stderr into the step logs", () => {
     const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
     const step = await db.get(Collections.stepInstances, "s1");
     const promise = exec(step!, makeNoopRuntime());
-    fake.emitOut("line1\nline2\n");
+    fake.emitOut('progress line\n{"verdict":"approved"}\n');
     fake.emitErr("err1\n");
     fake.emitClose(0);
     await promise;
     const final = await db.get(Collections.stepInstances, "s1");
-    expect(final?.logs).toEqual(["line1", "line2", "err1"]);
+    expect(final?.logs).toEqual([
+      "progress line",
+      '{"verdict":"approved"}',
+      "err1",
+    ]);
   });
 });
 
