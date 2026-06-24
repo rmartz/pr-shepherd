@@ -10,6 +10,7 @@ import {
 import type {
   CollectionDef,
   Db,
+  FieldIncrements,
   Filter,
   SubscriptionCallback,
 } from "@/db/types";
@@ -248,6 +249,12 @@ describe("monitorHeartbeats", () => {
       create: <T>(coll: CollectionDef<T>, doc: T) => baseDb.create(coll, doc),
       update: <T>(coll: CollectionDef<T>, id: string, patch: Partial<T>) =>
         baseDb.update(coll, id, patch),
+      increment: <T>(
+        coll: CollectionDef<T>,
+        id: string,
+        deltas: FieldIncrements,
+        patch?: Partial<T>,
+      ) => baseDb.increment(coll, id, deltas, patch),
       delete: <T>(coll: CollectionDef<T>, id: string) =>
         baseDb.delete(coll, id),
       subscribe: <T>(

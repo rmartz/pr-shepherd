@@ -1,5 +1,5 @@
-import type { ClientFirestoreModule } from "../hostedFirestore";
-import type { Repository } from "../../schemas";
+import type { ClientFirestoreModule } from "../hostedFirestoreTypes";
+import { RunStatus, type Repository, type WorkflowRun } from "../../schemas";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures and in-memory fakes for the hosted Firestore adapter tests.
@@ -26,6 +26,29 @@ export function makeRepo(overrides: Partial<Repository> = {}): Repository {
   };
 }
 
+export function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
+  return {
+    id: "run-1",
+    workflowId: "base-pr",
+    workflowVersion: 1,
+    repo: "rmartz/pr-shepherd",
+    prNumber: 7,
+    prTitle: "test",
+    status: RunStatus.Running,
+    childRunIds: [],
+    context: {},
+    createdAt: 1000,
+    updatedAt: 1000,
+    metrics: {
+      totalClaudeMs: 0,
+      totalActiveMs: 0,
+      totalScheduleWaitMs: 0,
+      totalExternalWaitMs: 0,
+    },
+    ...overrides,
+  };
+}
+
 // ---------------------------------------------------------------------------
 // Fake `firebase-admin/firestore` — just enough surface for the adapter.
 // Stores per-collection docs in a Map; supports get/set/update/delete and
@@ -39,6 +62,55 @@ interface FakeQuerySnapshotDoc {
 
 interface FakeQuerySnapshot {
   docs: FakeQuerySnapshotDoc[];
+}
+
+// Fake `FieldValue.increment` sentinel. The adapter's `increment()` is
+// constructed with `makeIncrement` so unit tests can recognize the sentinel
+// without loading the real admin SDK; the fake `update` below applies it.
+export class FakeIncrement {
+  constructor(public readonly by: number) {}
+}
+
+// Injectable `makeIncrement` that produces a `FakeIncrement` sentinel — the
+// hosted adapter stores these as opaque values in the `update` patch, exactly
+// as it would store the real `FieldValue.increment(n)`.
+export function makeFakeIncrement(by: number): FakeIncrement {
+  return new FakeIncrement(by);
+}
+
+function getNested(obj: Record<string, unknown>, path: string[]): unknown {
+  let current: unknown = obj;
+  for (const segment of path) {
+    if (current === null || typeof current !== "object") return undefined;
+    current = (current as Record<string, unknown>)[segment];
+  }
+  return current;
+}
+
+function resolveFieldValue(current: unknown, value: unknown): unknown {
+  if (value instanceof FakeIncrement) {
+    return (typeof current === "number" ? current : 0) + value.by;
+  }
+  return value;
+}
+
+function applyNestedPath(
+  obj: Record<string, unknown>,
+  path: string[],
+  value: unknown,
+): void {
+  let container = obj;
+  path.forEach((segment, index) => {
+    if (index === path.length - 1) {
+      container[segment] = resolveFieldValue(container[segment], value);
+      return;
+    }
+    const existing = container[segment];
+    if (existing === null || typeof existing !== "object") {
+      container[segment] = {};
+    }
+    container = container[segment] as Record<string, unknown>;
+  });
 }
 
 export class FakeAdminQuery {
@@ -125,10 +197,18 @@ export class FakeAdminDocRef {
     if (existing === undefined) {
       throw new Error(`No document to update at id ${this.id}`);
     }
-    this.store.set(this.id, {
-      ...(existing as Record<string, unknown>),
-      ...patch,
-    });
+    // Mirror the admin SDK's `update`: dotted keys address nested fields, and
+    // `FieldValue.increment` sentinels (here `FakeIncrement`) add to the
+    // current numeric value rather than replacing it. Plain keys are set as-is.
+    const next = structuredClone(existing as Record<string, unknown>);
+    for (const [key, value] of Object.entries(patch)) {
+      if (key.includes(".")) {
+        applyNestedPath(next, key.split("."), value);
+      } else {
+        next[key] = resolveFieldValue(getNested(next, [key]), value);
+      }
+    }
+    this.store.set(this.id, next);
     triggerListeners(this.store);
   }
 

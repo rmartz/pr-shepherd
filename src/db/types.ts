@@ -18,6 +18,13 @@ export interface CollectionDef<T> {
 // of documents matching the filter on every change.
 export type SubscriptionCallback<T> = (docs: T[]) => void;
 
+// Map of dotted field paths to numeric deltas applied atomically by
+// `Db.increment`. A path like `"metrics.totalClaudeMs"` adds its value to
+// the nested numeric field (treating a missing field as 0). Used for the
+// run-level metrics rollup so concurrent step completions never drop a delta
+// to a read-modify-write race.
+export type FieldIncrements = Record<string, number>;
+
 // Unsubscribe handle returned by `subscribe`. Idempotent.
 export type Unsubscribe = () => void;
 
@@ -33,6 +40,18 @@ export interface Db {
     coll: CollectionDef<T>,
     id: string,
     patch: Partial<T>,
+  ): Promise<void>;
+  // Atomically add `deltas` to nested numeric fields, optionally setting
+  // non-numeric fields (e.g. `updatedAt`) via `patch` in the same write.
+  // Unlike `get` + `update`, concurrent `increment` calls on the same
+  // document never drop a delta: the Firestore adapter wires each path to
+  // `FieldValue.increment(n)`, and the in-memory adapter serializes the
+  // read-modify-write under a per-document mutex.
+  increment<T>(
+    coll: CollectionDef<T>,
+    id: string,
+    deltas: FieldIncrements,
+    patch?: Partial<T>,
   ): Promise<void>;
   delete<T>(coll: CollectionDef<T>, id: string): Promise<void>;
   subscribe<T>(

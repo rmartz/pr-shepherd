@@ -1,142 +1,37 @@
-import * as firestoreClientSdk from "firebase/firestore";
-import { getClientFirestore } from "../../lib/firebase/client";
-import { Collections } from "../collections";
 import type {
   CollectionDef,
   Db,
+  FieldIncrements,
   Filter,
   SubscriptionCallback,
   Unsubscribe,
 } from "../types";
 import { AdminSubscriptionManager } from "./firestoreAdminSubscription";
 import type { AdminFirestoreLike, AdminQuery } from "./firestoreAdminTypes";
+import {
+  SUBSCRIBABLE_COLLECTIONS,
+  SubscriptionSource,
+  extractId,
+  filterEntries,
+  loadDefaultAdmin,
+  loadDefaultClient,
+  loadDefaultMakeIncrement,
+  stripUndefinedDeep,
+  toDocKey,
+} from "./hostedFirestoreTypes";
+import type {
+  ClientFirestoreModule,
+  HostedFirestoreDbOptions,
+  MakeIncrement,
+} from "./hostedFirestoreTypes";
 
 // ---------------------------------------------------------------------------
-// Hosted Firestore adapter.
-//
-// Writes go through `firebase-admin/firestore` (service-account credentials,
-// daemon-side). Reactive subscriptions have two paths selected by
-// `subscriptionSource`:
-//   - `"client"` (default) wraps `firebase/firestore`'s `onSnapshot` so the
-//     Vercel-hosted UI gets push-style updates gated by `firestore.rules`.
-//   - `"admin"` wraps the admin SDK's `Query.onSnapshot` so the daemon reacts
-//     to writes the instant they land — across any daemon collection, not just
-//     the rules-exposed subset — with backoff re-subscribe on transient
-//     stream errors. See `firestoreAdminSubscription.ts`.
-//
-// **Capability split** — admin and client paths are isolated:
-//   - The `firebase-admin` SDK is loaded via a **dynamic `await import()`**
-//     inside the admin methods. The static import graph of this file does
-//     not reach `firebase-admin`, so a UI bundle that only ever calls the
-//     client `subscribe()` will not pull the admin SDK into the browser.
-//   - The admin handle is **lazy-initialized** on first admin method call,
-//     not in the constructor. Constructing the adapter for UI-only use
-//     (client subscribe path) does not initialize any admin state.
-//
-// Test fakes inject both handles through `HostedFirestoreDbOptions` so the
-// real Firebase modules are never touched during unit tests.
+// Hosted Firestore adapter — `HostedFirestoreDb` implementation.
+// Types, constants, and utility helpers: `hostedFirestoreTypes.ts`.
 // ---------------------------------------------------------------------------
-
-// Structural admin types live in `firestoreAdminTypes.ts` and are shared with
-// the admin subscription manager. The client-SDK shape is local to this file.
-
-interface ClientQuerySnapshot {
-  docs: { id: string; data: () => unknown }[];
-}
-
-export interface ClientFirestoreModule {
-  // The Firebase client SDK exposes these as free functions, not methods —
-  // mirror that shape.
-  collection: (db: unknown, name: string) => unknown;
-  query: (base: unknown, ...constraints: unknown[]) => unknown;
-  where: (field: string, op: "==", value: unknown) => unknown;
-  onSnapshot: (
-    q: unknown,
-    onNext: (snap: ClientQuerySnapshot) => void,
-  ) => () => void;
-}
-
-// Selects which SDK `subscribe()` listens through. The daemon constructs the
-// adapter with `Admin`; the UI uses the default `Client` path.
-export enum SubscriptionSource {
-  Admin = "admin",
-  Client = "client",
-}
-
-export interface HostedFirestoreDbOptions {
-  // Inject for tests. When omitted, the admin SDK is dynamically imported
-  // on first admin method call.
-  adminFirestore?: AdminFirestoreLike;
-  // Inject for tests. Defaults to the statically-imported `firebase/firestore`
-  // module bound to the client Firestore handle from
-  // `src/lib/firebase/client`.
-  clientFirestoreModule?: ClientFirestoreModule;
-  // Inject for tests. Defaults to `getClientFirestore()`.
-  clientFirestore?: unknown;
-  // Which SDK `subscribe()` listens through. Defaults to `Client` so existing
-  // UI consumers are unaffected; the daemon passes `Admin`.
-  subscriptionSource?: SubscriptionSource;
-  // Backoff tuning for the admin subscription manager. Injectable for tests.
-  adminSubscribeBaseBackoffMs?: number;
-  adminSubscribeMaxBackoffMs?: number;
-}
-
-// Client-subscribable collection names — UI-readable per `firestore.rules`.
-// The client `subscribe()` path throws for any other collection so an
-// out-of-bounds UI subscription fails fast with a clear error rather than
-// surfacing as an opaque permission-denied from Firestore. The admin path
-// has no such gate: the service-account credentials bypass rules, so the
-// daemon may subscribe to any collection (`commands`, derivation triggers,
-// etc.).
-const SUBSCRIBABLE_COLLECTIONS = new Set<string>([
-  Collections.repositories.name,
-  Collections.stepInstances.name,
-  Collections.workflowDefinitions.name,
-  Collections.workflowRuns.name,
-]);
-
-// Dynamically load the admin firestore handle. The `await import()` keeps
-// `firebase-admin` out of any client bundle that does not reach this code
-// path. The resolved module is cached at the call site so repeated admin
-// operations do not re-import.
-async function loadDefaultAdmin(): Promise<AdminFirestoreLike> {
-  const mod = await import("../../lib/firebase/admin");
-  return mod.getAdminFirestore() as unknown as AdminFirestoreLike;
-}
-
-function loadDefaultClient(): {
-  module: ClientFirestoreModule;
-  firestore: unknown;
-} {
-  return {
-    module: firestoreClientSdk as unknown as ClientFirestoreModule,
-    firestore: getClientFirestore(),
-  };
-}
-
-function stripUndefinedDeep(value: unknown): unknown {
-  if (value === undefined) return undefined;
-  if (Array.isArray(value)) {
-    return value
-      .map((entry) => stripUndefinedDeep(entry))
-      .filter((entry) => entry !== undefined);
-  }
-  if (value !== null && typeof value === "object") {
-    const out: Record<string, unknown> = {};
-    for (const [k, v] of Object.entries(value as Record<string, unknown>)) {
-      const cleaned = stripUndefinedDeep(v);
-      if (cleaned !== undefined) out[k] = cleaned;
-    }
-    return out;
-  }
-  return value;
-}
 
 export class HostedFirestoreDb implements Db {
-  // Admin handle is lazy: either provided at construction (tests) or loaded
-  // on first admin call via dynamic import (production). Holding a Promise
-  // also serves as a single-flight latch so concurrent admin calls share
-  // one load.
+  // Admin handle: lazy-initialized on first call (single-flight Promise latch).
   private readonly injectedAdmin: AdminFirestoreLike | undefined;
   private adminPromise: Promise<AdminFirestoreLike> | undefined;
 
@@ -146,8 +41,13 @@ export class HostedFirestoreDb implements Db {
   private readonly subscriptionSource: SubscriptionSource;
   private readonly adminSubscriptions: AdminSubscriptionManager;
 
+  // Increment factory: injected for tests, else lazy-loaded (single-flight).
+  private readonly injectedMakeIncrement: MakeIncrement | undefined;
+  private makeIncrementPromise: Promise<MakeIncrement> | undefined;
+
   constructor(opts: HostedFirestoreDbOptions) {
     this.injectedAdmin = opts.adminFirestore;
+    this.injectedMakeIncrement = opts.makeIncrement;
     this.subscriptionSource =
       opts.subscriptionSource ?? SubscriptionSource.Client;
     this.adminSubscriptions = new AdminSubscriptionManager({
@@ -173,39 +73,17 @@ export class HostedFirestoreDb implements Db {
     return this.adminPromise;
   }
 
-  private extractId<T>(coll: CollectionDef<T>, doc: T): string {
-    const raw = doc[coll.idField];
-    if (typeof raw !== "string" || raw.length === 0) {
-      throw new Error(
-        `Document ${coll.name}.${String(coll.idField)} must be a non-empty string; got ${typeof raw === "string" ? `""` : typeof raw}.`,
-      );
+  private getMakeIncrement(): Promise<MakeIncrement> {
+    if (this.injectedMakeIncrement !== undefined) {
+      return Promise.resolve(this.injectedMakeIncrement);
     }
-    return raw;
-  }
-
-  private toDocKey(id: string): string {
-    return encodeURIComponent(id);
-  }
-
-  private filterEntries<T>(
-    filter: Filter<T> | undefined,
-  ): { field: string; value: unknown }[] {
-    if (filter === undefined) return [];
-    const out: { field: string; value: unknown }[] = [];
-    for (const key of Object.keys(filter) as (keyof T)[]) {
-      // Skip undefined filter values (consistent with the in-memory adapter):
-      // callers spread optional values and expect undefined to mean
-      // "not specified", not "match docs whose field is undefined".
-      const value = filter[key];
-      if (value === undefined) continue;
-      out.push({ field: String(key), value });
-    }
-    return out;
+    this.makeIncrementPromise ??= loadDefaultMakeIncrement();
+    return this.makeIncrementPromise;
   }
 
   async get<T>(coll: CollectionDef<T>, id: string): Promise<T | undefined> {
     const admin = await this.getAdmin();
-    const snap = await admin.collection(coll.name).doc(this.toDocKey(id)).get();
+    const snap = await admin.collection(coll.name).doc(toDocKey(id)).get();
     if (!snap.exists) return undefined;
     return coll.schema.parse(snap.data());
   }
@@ -213,7 +91,7 @@ export class HostedFirestoreDb implements Db {
   async list<T>(coll: CollectionDef<T>, filter?: Filter<T>): Promise<T[]> {
     const admin = await this.getAdmin();
     let query: AdminQuery = admin.collection(coll.name);
-    for (const f of this.filterEntries(filter)) {
+    for (const f of filterEntries(filter)) {
       query = query.where(f.field, "==", f.value);
     }
     const snap = await query.get();
@@ -222,11 +100,11 @@ export class HostedFirestoreDb implements Db {
 
   async create<T>(coll: CollectionDef<T>, doc: T): Promise<void> {
     const parsed = coll.schema.parse(doc);
-    const id = this.extractId(coll, parsed);
+    const id = extractId(coll, parsed);
     const admin = await this.getAdmin();
     await admin
       .collection(coll.name)
-      .doc(this.toDocKey(id))
+      .doc(toDocKey(id))
       .set(stripUndefinedDeep(parsed));
   }
 
@@ -252,7 +130,7 @@ export class HostedFirestoreDb implements Db {
     // persisting. The extra round-trip is acceptable for the daemon's
     // write volume.
     const admin = await this.getAdmin();
-    const docRef = admin.collection(coll.name).doc(this.toDocKey(id));
+    const docRef = admin.collection(coll.name).doc(toDocKey(id));
     const snap = await docRef.get();
     if (!snap.exists) {
       throw new Error(`Document ${id} not found in ${coll.name}`);
@@ -262,9 +140,44 @@ export class HostedFirestoreDb implements Db {
     await docRef.set(stripUndefinedDeep(parsed));
   }
 
+  async increment<T>(
+    coll: CollectionDef<T>,
+    id: string,
+    deltas: FieldIncrements,
+    patch?: Partial<T>,
+  ): Promise<void> {
+    if (patch !== undefined && coll.idField in patch) {
+      const patchedId = (patch as Partial<Record<keyof T, unknown>>)[
+        coll.idField
+      ];
+      if (patchedId !== undefined && patchedId !== id) {
+        throw new Error(
+          `Cannot change ${coll.name}.${String(coll.idField)} via increment (id "${id}" → "${String(patchedId)}"); delete and re-create instead.`,
+        );
+      }
+    }
+    // Build a single `update` patch where each dotted field path carries a
+    // `FieldValue.increment` sentinel. Firestore applies these server-side
+    // and atomically, so concurrent increments on the same document never
+    // race the way a `get` + `update` read-modify-write would. We skip the
+    // fetch-merge-validate round-trip `update` does because the merged value
+    // is only known after the server applies the increment.
+    const makeIncrement = await this.getMakeIncrement();
+    const updatePatch: Record<string, unknown> = {};
+    for (const [path, by] of Object.entries(deltas)) {
+      updatePatch[path] = makeIncrement(by);
+    }
+    if (patch !== undefined) {
+      const cleaned = stripUndefinedDeep(patch) as Record<string, unknown>;
+      Object.assign(updatePatch, cleaned);
+    }
+    const admin = await this.getAdmin();
+    await admin.collection(coll.name).doc(toDocKey(id)).update(updatePatch);
+  }
+
   async delete<T>(coll: CollectionDef<T>, id: string): Promise<void> {
     const admin = await this.getAdmin();
-    await admin.collection(coll.name).doc(this.toDocKey(id)).delete();
+    await admin.collection(coll.name).doc(toDocKey(id)).delete();
   }
 
   subscribe<T>(
@@ -284,7 +197,7 @@ export class HostedFirestoreDb implements Db {
       );
     }
     const base = this.clientMod.collection(this.clientFs, coll.name);
-    const constraints = this.filterEntries(filter).map((f) =>
+    const constraints = filterEntries(filter).map((f) =>
       this.clientMod.where(f.field, "==", f.value),
     );
     const q =
