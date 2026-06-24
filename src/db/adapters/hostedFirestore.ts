@@ -4,6 +4,7 @@ import { Collections } from "../collections";
 import type {
   CollectionDef,
   Db,
+  FieldIncrements,
   Filter,
   SubscriptionCallback,
   Unsubscribe,
@@ -56,6 +57,11 @@ export interface ClientFirestoreModule {
   ) => () => void;
 }
 
+// Produces an atomic field-increment sentinel for `docRef.update`. In
+// production this is `FieldValue.increment` from `firebase-admin/firestore`;
+// tests inject a fake so the unit suite never loads the admin SDK.
+export type MakeIncrement = (by: number) => unknown;
+
 // Selects which SDK `subscribe()` listens through. The daemon constructs the
 // adapter with `Admin`; the UI uses the default `Client` path.
 export enum SubscriptionSource {
@@ -79,6 +85,9 @@ export interface HostedFirestoreDbOptions {
   // Backoff tuning for the admin subscription manager. Injectable for tests.
   adminSubscribeBaseBackoffMs?: number;
   adminSubscribeMaxBackoffMs?: number;
+  // Inject for tests. Defaults to a lazy `FieldValue.increment` from the
+  // dynamically-imported admin SDK.
+  makeIncrement?: MakeIncrement;
 }
 
 // Client-subscribable collection names — UI-readable per `firestore.rules`.
@@ -102,6 +111,14 @@ const SUBSCRIBABLE_COLLECTIONS = new Set<string>([
 async function loadDefaultAdmin(): Promise<AdminFirestoreLike> {
   const mod = await import("../../lib/firebase/admin");
   return mod.getAdminFirestore() as unknown as AdminFirestoreLike;
+}
+
+// Dynamically load `FieldValue.increment` from the admin SDK. Kept off the
+// static import graph (same rationale as `loadDefaultAdmin`) so a client
+// bundle that never increments does not pull in `firebase-admin`.
+async function loadDefaultMakeIncrement(): Promise<MakeIncrement> {
+  const mod = await import("firebase-admin/firestore");
+  return (by: number) => mod.FieldValue.increment(by);
 }
 
 function loadDefaultClient(): {
@@ -146,8 +163,14 @@ export class HostedFirestoreDb implements Db {
   private readonly subscriptionSource: SubscriptionSource;
   private readonly adminSubscriptions: AdminSubscriptionManager;
 
+  // Increment-sentinel factory: injected for tests, else lazily loaded from
+  // the admin SDK on first `increment` call (cached as a single-flight latch).
+  private readonly injectedMakeIncrement: MakeIncrement | undefined;
+  private makeIncrementPromise: Promise<MakeIncrement> | undefined;
+
   constructor(opts: HostedFirestoreDbOptions) {
     this.injectedAdmin = opts.adminFirestore;
+    this.injectedMakeIncrement = opts.makeIncrement;
     this.subscriptionSource =
       opts.subscriptionSource ?? SubscriptionSource.Client;
     this.adminSubscriptions = new AdminSubscriptionManager({
@@ -171,6 +194,14 @@ export class HostedFirestoreDb implements Db {
     }
     this.adminPromise ??= loadDefaultAdmin();
     return this.adminPromise;
+  }
+
+  private getMakeIncrement(): Promise<MakeIncrement> {
+    if (this.injectedMakeIncrement !== undefined) {
+      return Promise.resolve(this.injectedMakeIncrement);
+    }
+    this.makeIncrementPromise ??= loadDefaultMakeIncrement();
+    return this.makeIncrementPromise;
   }
 
   private extractId<T>(coll: CollectionDef<T>, doc: T): string {
@@ -260,6 +291,44 @@ export class HostedFirestoreDb implements Db {
     const merged = { ...(snap.data() as object), ...patch };
     const parsed = coll.schema.parse(merged);
     await docRef.set(stripUndefinedDeep(parsed));
+  }
+
+  async increment<T>(
+    coll: CollectionDef<T>,
+    id: string,
+    deltas: FieldIncrements,
+    patch?: Partial<T>,
+  ): Promise<void> {
+    if (patch !== undefined && coll.idField in patch) {
+      const patchedId = (patch as Partial<Record<keyof T, unknown>>)[
+        coll.idField
+      ];
+      if (patchedId !== undefined && patchedId !== id) {
+        throw new Error(
+          `Cannot change ${coll.name}.${String(coll.idField)} via increment (id "${id}" → "${String(patchedId)}"); delete and re-create instead.`,
+        );
+      }
+    }
+    // Build a single `update` patch where each dotted field path carries a
+    // `FieldValue.increment` sentinel. Firestore applies these server-side
+    // and atomically, so concurrent increments on the same document never
+    // race the way a `get` + `update` read-modify-write would. We skip the
+    // fetch-merge-validate round-trip `update` does because the merged value
+    // is only known after the server applies the increment.
+    const makeIncrement = await this.getMakeIncrement();
+    const updatePatch: Record<string, unknown> = {};
+    for (const [path, by] of Object.entries(deltas)) {
+      updatePatch[path] = makeIncrement(by);
+    }
+    if (patch !== undefined) {
+      const cleaned = stripUndefinedDeep(patch) as Record<string, unknown>;
+      Object.assign(updatePatch, cleaned);
+    }
+    const admin = await this.getAdmin();
+    await admin
+      .collection(coll.name)
+      .doc(this.toDocKey(id))
+      .update(updatePatch);
   }
 
   async delete<T>(coll: CollectionDef<T>, id: string): Promise<void> {

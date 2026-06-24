@@ -198,6 +198,39 @@ describe("Runner merges executor output into the parent workflowRun.context on s
       totalExternalWaitMs: 0,
     });
   });
+
+  it("rolls up concurrent completions on the same run without dropping a delta", async () => {
+    // The rollup uses the atomic `db.increment` primitive (#79) rather than a
+    // read-modify-write `get` + `update`, so two steps completing concurrently
+    // on the same run both land in the run total. A non-atomic rollup would let
+    // the second writer overwrite the first, dropping one step's delta.
+    const db = createInMemoryDb();
+    const run = await seedRun(db);
+    await seedQueuedStep(db, {
+      id: "step-a",
+      runId: run.id,
+      stepType: StepType.GithubApi,
+      createdAt: 1000,
+      queuedAt: 1100,
+    });
+    await seedQueuedStep(db, {
+      id: "step-b",
+      runId: run.id,
+      stepType: StepType.GithubApi,
+      createdAt: 1000,
+      queuedAt: 1100,
+    });
+    const runner = createRunner(db, {
+      [StepType.GithubApi]: () => Promise.resolve({ output: {} }),
+    });
+    const stepA = await db.get(Collections.stepInstances, "step-a");
+    const stepB = await db.get(Collections.stepInstances, "step-b");
+    await Promise.all([runner.dispatch(stepA!), runner.dispatch(stepB!)]);
+    const updatedRun = await db.get(Collections.workflowRuns, run.id);
+    // Each step contributes scheduleWaitMs = queuedAt - createdAt = 100, so
+    // both deltas landing yields a run total of 200.
+    expect(updatedRun?.metrics.totalScheduleWaitMs).toBe(200);
+  });
 });
 
 describe("Runner transitions to failed when the executor throws", () => {

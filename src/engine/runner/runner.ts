@@ -1,7 +1,10 @@
 import { Collections } from "@/db/collections";
 import { StepStatus, type StepInstance, type StepType } from "@/db/schemas";
 import type { Db } from "@/db/types";
-import { applyStepDelta, computeStepMetrics } from "@/engine/metrics/rollup";
+import {
+  computeStepMetrics,
+  runMetricIncrements,
+} from "@/engine/metrics/rollup";
 import { createStepExecutorRuntime } from "./runtime";
 import type {
   ExecutorMap,
@@ -126,15 +129,19 @@ async function completeStep(
     // step's completion so no data is lost.
     return;
   }
-  const nextRunMetrics = applyStepDelta(run.metrics, stepDelta);
-  // Non-atomic read-modify-write: concurrent terminal completions on the
-  // same run can race and drop a delta from the rollup. Tracked in #79
-  // (atomic `db.increment` primitive on the Db adapter).
   await db.update(Collections.workflowRuns, step.runId, {
     context: { ...run.context, ...result.output },
-    metrics: nextRunMetrics,
-    updatedAt: completedAt,
   });
+  // Roll the step's delta into the run total with an atomic `increment`
+  // rather than a read-modify-write `update`, so concurrent completions on
+  // the same run never drop a delta (#79). The context merge above is a
+  // separate concern with its own last-writer-wins semantics (#57).
+  await db.increment(
+    Collections.workflowRuns,
+    step.runId,
+    runMetricIncrements(stepDelta),
+    { updatedAt: completedAt },
+  );
 }
 
 async function failStep(
@@ -155,16 +162,22 @@ async function failStep(
     completedAt,
     metrics: nextStepMetrics,
   });
+  // Existence check only: the parent run may have been deleted while the step
+  // executed. `increment` would throw on a missing doc, and an orphaned step
+  // is an inconsistency the runner cannot repair — we have already recorded
+  // the failure, so skip the rollup rather than crash.
   const run = await db.get(Collections.workflowRuns, step.runId);
   if (run === undefined) {
     return;
   }
-  const nextRunMetrics = applyStepDelta(run.metrics, stepDelta);
-  // Non-atomic read-modify-write — see comment in completeStep. #79.
-  await db.update(Collections.workflowRuns, step.runId, {
-    metrics: nextRunMetrics,
-    updatedAt: completedAt,
-  });
+  // Atomic `increment` rather than read-modify-write `update`, so concurrent
+  // terminal completions on the same run never drop a delta (#79).
+  await db.increment(
+    Collections.workflowRuns,
+    step.runId,
+    runMetricIncrements(stepDelta),
+    { updatedAt: completedAt },
+  );
 }
 
 function addStepDelta(

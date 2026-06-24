@@ -204,7 +204,7 @@ Each step records four mutually exclusive time buckets (vision §6):
 | Schedule wait | Time queued waiting for a concurrency slot      |
 | External wait | Time `wait_external` spent polling CI / Copilot |
 
-Run-level metrics are the sum of all completed step instances. Roll-up is incremental — updated as each step completes, not recomputed from scratch.
+Run-level metrics are the sum of all completed step instances. Roll-up is incremental — updated as each step completes, not recomputed from scratch — and atomic: the runner folds each step's delta into the run total via the `Db.increment` primitive (`FieldValue.increment` on Firestore, a per-document read-apply-write on the in-memory adapter), so concurrent step completions on the same run never drop a delta to a read-modify-write race.
 
 ## Vitest Configuration
 

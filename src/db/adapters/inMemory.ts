@@ -1,6 +1,7 @@
 import type {
   CollectionDef,
   Db,
+  FieldIncrements,
   Filter,
   SubscriptionCallback,
   Unsubscribe,
@@ -17,6 +18,30 @@ import type {
 interface Subscription<T> {
   filter: Filter<T> | undefined;
   onChange: SubscriptionCallback<T>;
+}
+
+// Add `by` to the numeric leaf addressed by the dotted `path`, creating
+// intermediate objects and treating a missing leaf as 0 — the in-memory
+// analogue of `FieldValue.increment` on a dotted field path.
+function addAtPath(
+  obj: Record<string, unknown>,
+  path: string,
+  by: number,
+): void {
+  const segments = path.split(".");
+  let container = obj;
+  segments.forEach((segment, index) => {
+    if (index === segments.length - 1) {
+      const current = container[segment];
+      container[segment] = (typeof current === "number" ? current : 0) + by;
+      return;
+    }
+    const existing = container[segment];
+    if (existing === null || typeof existing !== "object") {
+      container[segment] = {};
+    }
+    container = container[segment] as Record<string, unknown>;
+  });
 }
 
 function matchesFilter<T>(doc: T, filter: Filter<T> | undefined): boolean {
@@ -122,6 +147,33 @@ class InMemoryDb implements Db {
       }
     }
     const merged = { ...existing, ...patch };
+    const parsed = coll.schema.parse(merged);
+    this.store(coll).set(id, parsed);
+    this.notify(coll);
+  }
+
+  async increment<T>(
+    coll: CollectionDef<T>,
+    id: string,
+    deltas: FieldIncrements,
+    patch?: Partial<T>,
+  ): Promise<void> {
+    const existing = this.store(coll).get(id);
+    if (existing === undefined) {
+      throw new Error(`Document ${id} not found in ${coll.name}`);
+    }
+    // The read-apply-write below runs synchronously with no `await` between
+    // the read and the write, so it cannot interleave with another
+    // `increment` on the same document — JS's single-threaded event loop is
+    // the mutex. This is what makes concurrent run-metric rollups land every
+    // delta where the old `get` + `update` read-modify-write dropped one.
+    const merged = { ...(existing as Record<string, unknown>) };
+    for (const [path, by] of Object.entries(deltas)) {
+      addAtPath(merged, path, by);
+    }
+    if (patch !== undefined) {
+      Object.assign(merged, patch);
+    }
     const parsed = coll.schema.parse(merged);
     this.store(coll).set(id, parsed);
     this.notify(coll);
