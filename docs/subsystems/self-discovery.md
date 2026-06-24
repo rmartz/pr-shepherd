@@ -27,6 +27,8 @@ Each pass re-reads open PRs live, so a PR opened **between** passes is picked up
 
 Idempotency lives one layer down in `enrollPr`, keyed on `repo + prNumber + workflowId` and skipping non-terminal runs. An already-enrolled / in-flight PR re-discovered on a later pass therefore yields `created: false` and **no second run**. Self-discovery adds no state of its own that could drift from that guard — re-running a pass is always safe.
 
+The dedupe lookup (`findActiveRun`) queries `workflowRuns` on those three equality fields and then narrows by run status. A composite index `(repo, prNumber, workflowId, status)` on the `workflowRuns` collection backs that query — declared in [`firestore.indexes.json`](../../firestore.indexes.json) so it stays index-backed as run volume grows (#167).
+
 ## Observability: phases and exclusions
 
 The daemon runs discovery at three points in each drain (lifecycle design §6): **upfront**, **opportunistically mid-batch** when a worker slot frees, and at **end of drain**. `DiscoveryPhase` tags which trigger fired a given pass — purely an observability label, since the discover→enroll logic is identical at each point. Every pass logs its exclusion reasons, each tagged with the phase:
