@@ -1,4 +1,15 @@
 {
-  "indexes": [],
+  "indexes": [
+    {
+      "collectionGroup": "workflowRuns",
+      "queryScope": "COLLECTION",
+      "fields": [
+        { "fieldPath": "repo", "order": "ASCENDING" },
+        { "fieldPath": "prNumber", "order": "ASCENDING" },
+        { "fieldPath": "workflowId", "order": "ASCENDING" },
+        { "fieldPath": "status", "order": "ASCENDING" }
+      ]
+    }
+  ],
   "fieldOverrides": []
 }
