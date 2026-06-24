@@ -1,8 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import {
-  createHostedFirestoreDb,
-  type HostedFirestoreDbOptions,
-} from "./hostedFirestore";
+import { createHostedFirestoreDb } from "./hostedFirestore";
+import type { HostedFirestoreDbOptions } from "./hostedFirestoreTypes";
 import { Collections } from "../collections";
 import type { Repository } from "../schemas";
 

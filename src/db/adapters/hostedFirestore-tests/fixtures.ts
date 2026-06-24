@@ -1,4 +1,4 @@
-import type { ClientFirestoreModule } from "../hostedFirestore";
+import type { ClientFirestoreModule } from "../hostedFirestoreTypes";
 import { RunStatus, type Repository, type WorkflowRun } from "../../schemas";
 
 // ---------------------------------------------------------------------------

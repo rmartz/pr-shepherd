@@ -1,5 +1,6 @@
 import { describe, it, expect, vi } from "vitest";
-import { createHostedFirestoreDb, SubscriptionSource } from "./hostedFirestore";
+import { createHostedFirestoreDb } from "./hostedFirestore";
+import { SubscriptionSource } from "./hostedFirestoreTypes";
 import type {
   AdminFirestoreLike,
   AdminQuery,

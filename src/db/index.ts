@@ -16,10 +16,8 @@ export type {
 export { Collections } from "./collections";
 export * from "./schemas";
 
-import {
-  createHostedFirestoreDb,
-  SubscriptionSource,
-} from "./adapters/hostedFirestore";
+import { createHostedFirestoreDb } from "./adapters/hostedFirestore";
+import { SubscriptionSource } from "./adapters/hostedFirestoreTypes";
 import { createInMemoryDb } from "./adapters/inMemory";
 import type { Db } from "./types";
 
