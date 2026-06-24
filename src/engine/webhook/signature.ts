@@ -28,14 +28,41 @@ export function computeSignature(rawBody: string, secret: string): string {
 // for `rawBody` under `secret`. A missing/empty header, a header without
 // the `sha256=` prefix, or a length mismatch all return false rather than
 // throwing — the ingress maps a false result to a 401, never a 500.
+//
+// `secret` may be a single secret or an array of secrets. The array form
+// supports **zero-downtime secret rotation** (#114): during the overlap
+// window the ingress configures both the new and the previous secret
+// (`[next, current]`), and a delivery signed with *either* is accepted — so
+// in-flight deliveries signed under the old secret are not rejected while
+// GitHub's webhook config is updated. Once the rotation completes the old
+// secret is dropped and only the new one remains. An empty array accepts
+// nothing.
 export function verifySignature(
   rawBody: string,
   signatureHeader: string | undefined,
-  secret: string,
+  secret: string | readonly string[],
 ): boolean {
   if (signatureHeader === undefined || signatureHeader.length === 0) {
     return false;
   }
+  const secrets = typeof secret === "string" ? [secret] : secret;
+  // Match against every accepted secret without short-circuiting, so the
+  // accept path costs the same regardless of which secret matched — no timing
+  // signal distinguishes the new secret from the old during rotation.
+  let matched = false;
+  for (const candidate of secrets) {
+    if (matchesSecret(rawBody, signatureHeader, candidate)) {
+      matched = true;
+    }
+  }
+  return matched;
+}
+
+function matchesSecret(
+  rawBody: string,
+  signatureHeader: string,
+  secret: string,
+): boolean {
   const expected = computeSignature(rawBody, secret);
   // `timingSafeEqual` throws on differing buffer lengths, which would
   // itself leak length information and crash the handler — guard the

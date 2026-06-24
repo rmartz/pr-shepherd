@@ -29,8 +29,10 @@ export interface ReceiveWebhookInput {
   deliveryId: string;
   // `X-GitHub-Event` — the event type string.
   eventType: string;
-  // The configured webhook secret (supplied by the ingress from the env).
-  secret: string;
+  // The configured webhook secret(s) (supplied by the ingress from the env).
+  // An array accepts a delivery signed under any of the secrets, supporting
+  // zero-downtime rotation (#114) — see `verifySignature`.
+  secret: string | readonly string[];
   // Injected clock for deterministic `receivedAt` in tests.
   now?: () => number;
 }
