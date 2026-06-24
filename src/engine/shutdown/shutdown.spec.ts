@@ -55,7 +55,9 @@ describe("gracefulShutdown halts the scheduler and tears down", () => {
 
     expect(schedulerStop).toHaveBeenCalledOnce();
     expect(stop).toHaveBeenCalledOnce();
-    expect(result).toEqual({ drained: true, remaining: 0, exitCode: 0 });
+    expect(result.drained).toBe(true);
+    expect(result.remaining).toBe(0);
+    expect(result.exitCode).toBe(0);
     expect(onExit).toHaveBeenCalledWith(0);
   });
 });
@@ -84,7 +86,9 @@ describe("gracefulShutdown drains in-flight steps", () => {
     });
 
     expect(sleep).toHaveBeenCalledOnce();
-    expect(result).toEqual({ drained: true, remaining: 0, exitCode: 0 });
+    expect(result.drained).toBe(true);
+    expect(result.remaining).toBe(0);
+    expect(result.exitCode).toBe(0);
     expect(onExit).toHaveBeenCalledWith(0);
     expect(stop).toHaveBeenCalledOnce();
   });

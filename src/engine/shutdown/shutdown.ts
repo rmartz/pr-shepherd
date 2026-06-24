@@ -1,6 +1,7 @@
 import { Collections } from "@/db/collections";
 import { StepStatus } from "@/db/schemas";
 import type { DaemonHandle } from "@/engine/bootstrap";
+import { aggregateDrainResults, type DrainAggregate } from "@/engine/waitset";
 
 // ---------------------------------------------------------------------------
 // Graceful shutdown (issue #208).
@@ -43,6 +44,10 @@ export interface GracefulShutdownResult {
   drained: boolean; // no `running` steps remained at exit
   remaining: number; // `running` steps still present at exit
   exitCode: number;
+  // Per-PR rollup of every step's terminal/in-flight state at exit (#110), so
+  // the shutdown path reports where each PR landed rather than only a global
+  // count. Computed once after the drain settles.
+  aggregate: DrainAggregate;
 }
 
 async function countRunning(handle: DaemonHandle): Promise<number> {
@@ -80,14 +85,18 @@ export async function gracefulShutdown(
     remaining = await countRunning(handle);
   }
 
-  // 3. Full teardown (idempotent: detaches subscriptions, re-stops scheduler).
+  // 3. Aggregate per-PR results before teardown so the report reflects where
+  //    each PR landed (completed / failed / still in flight at exit).
+  const aggregate = await aggregateDrainResults(handle.db);
+
+  // 4. Full teardown (idempotent: detaches subscriptions, re-stops scheduler).
   handle.stop();
 
-  // 4. Bounded exit.
+  // 5. Bounded exit.
   const drained = remaining === 0;
   const exitCode = drained ? 0 : 1;
   onExit(exitCode);
-  return { drained, remaining, exitCode };
+  return { drained, remaining, exitCode, aggregate };
 }
 
 // Register SIGTERM/SIGINT handlers that run `gracefulShutdown` once (repeat
