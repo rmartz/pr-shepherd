@@ -4,6 +4,7 @@ import { Collections } from "@/db/collections";
 import type { StepInstance } from "@/db/schemas";
 import type { Db } from "@/db/types";
 import type { ExecutorResult, StepExecutor } from "@/engine/runner";
+import { parseSkillOutput } from "./parseSkillOutput";
 
 // ---------------------------------------------------------------------------
 // `claude_skill` step executor (Epic 4, #61).
@@ -103,24 +104,6 @@ function defaultSpawn(
   });
 }
 
-function parseOutput(stdout: string): Record<string, unknown> {
-  const trimmed = stdout.trim();
-  if (trimmed.length === 0) return {};
-  try {
-    const parsed: unknown = JSON.parse(trimmed);
-    if (
-      parsed !== null &&
-      typeof parsed === "object" &&
-      !Array.isArray(parsed)
-    ) {
-      return parsed as Record<string, unknown>;
-    }
-    return { raw: parsed };
-  } catch {
-    return { raw: trimmed };
-  }
-}
-
 function toLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
@@ -196,7 +179,7 @@ export function createClaudeSkillExecutor(
         try {
           await db.update(Collections.stepInstances, step.id, { logs });
           if (code === 0) {
-            resolve({ output: parseOutput(stdout) });
+            resolve({ output: parseSkillOutput(stdout) });
           } else {
             reject(
               new Error(

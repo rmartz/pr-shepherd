@@ -18,7 +18,7 @@ The subprocess is spawned with `GITHUB_TOKEN`, `GH_TOKEN`, and any GitHub-MCP cr
 
 - **Heartbeat** — writes `heartbeatAt` on an interval so the heartbeat monitor can recover a hung subprocess.
 - **Cancellation** — aborting the injected signal sends `SIGTERM`, then `SIGKILL` after a grace period.
-- **Output** — stdout is parsed as JSON into the step output (falling back to `{ raw }`); stdout/stderr lines are persisted to the step's `logs`.
+- **Output** — stdout is parsed into the step output by `parseSkillOutput` (`src/steps/parseSkillOutput.ts`), which tolerates CLI preamble/progress noise: it tries the whole stream, then the last JSON-object line, then the last balanced `{...}` span, and throws `SkillOutputParseError` if no JSON object can be recovered so the step fails loudly with a diagnostic rather than silently returning `{ raw }`. Empty stdout is a legitimate no-result and yields `{}`. stdout/stderr lines are persisted to the step's `logs`.
 - **Metrics** — the executor does **not** write `metrics.claudeMs`; the runner derives it from the step's running duration to avoid double-counting.
 
 ## Public API
