@@ -41,5 +41,6 @@ The enqueued cycle reuses the existing run/step path verbatim: it creates a `der
 ## Related
 
 - [Webhook Receiver](webhook-receiver.md) — persists the raw deliveries this module consumes.
+- [Webhook Delivery Consumer](webhook-delivery-consumer.md) — drains the persisted backlog and invokes this trigger once per coalesced PR, adding delivery dedup, burst-collapse, and replay tolerance.
 - [Event-Driven Scheduler](event-driven-scheduler.md) — admits the `derive_pr_state` step this trigger enqueues; a webhook-derived trigger is one of its subscription sources.
 - [PR State Derivation](pr-state-derivation.md) / [Gate Model](gate-model.md) — the reused lifecycle core the re-seeded step drives.

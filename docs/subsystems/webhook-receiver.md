@@ -8,7 +8,7 @@ tags: [webhook, ingress, github, signature, idempotency, persistence]
 
 # Webhook Receiver
 
-The webhook receiver is PR Shepherd's **event ingress** (Epic 12, [#111](https://github.com/rmartz/pr-shepherd/issues/111); vision [#1](https://github.com/rmartz/pr-shepherd/issues/1) §13.1, §15). It receives GitHub webhook deliveries, validates each delivery's signature, and persists the raw event to the `webhookEvents` Firestore collection **before any processing** — so deliveries are durable and replay-safe, and downstream state-derivation can be triggered by events rather than polling. Later Epic 12 issues ([#112](https://github.com/rmartz/pr-shepherd/issues/112)+) consume those persisted events for dedup, ordering, and trigger.
+The webhook receiver is PR Shepherd's **event ingress** (Epic 12, [#111](https://github.com/rmartz/pr-shepherd/issues/111); vision [#1](https://github.com/rmartz/pr-shepherd/issues/1) §13.1, §15). It receives GitHub webhook deliveries, validates each delivery's signature, and persists the raw event to the `webhookEvents` Firestore collection **before any processing** — so deliveries are durable and replay-safe, and downstream state-derivation can be triggered by events rather than polling. Later Epic 12 issues consume those persisted events: the [Event → Derivation Trigger](event-derivation-trigger.md) ([#112](https://github.com/rmartz/pr-shepherd/issues/112)) maps one delivery to a re-derivation, and the [Webhook Delivery Consumer](webhook-delivery-consumer.md) ([#113](https://github.com/rmartz/pr-shepherd/issues/113)) drains the backlog with dedup, burst-collapse, and replay tolerance.
 
 ## Pipeline
 
