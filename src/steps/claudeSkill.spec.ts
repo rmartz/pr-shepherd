@@ -29,14 +29,19 @@ interface FakeChild {
   kill: ReturnType<typeof vi.fn>;
   emitOut: (s: string) => void;
   emitErr: (s: string) => void;
-  emitClose: (code: number | null) => void;
+  emitClose: (code: number | null, signal?: NodeJS.Signals | null) => void;
   emitError: (err: Error) => void;
 }
 
 function makeFakeChild(): FakeChild {
   let outCb: ((chunk: string) => void) | undefined;
   let errCb: ((chunk: string) => void) | undefined;
-  let closeCb: ((code: number | null) => void | Promise<void>) | undefined;
+  let closeCb:
+    | ((
+        code: number | null,
+        signal: NodeJS.Signals | null,
+      ) => void | Promise<void>)
+    | undefined;
   let errorCb: ((err: Error) => void) | undefined;
   const kill = vi.fn((): boolean => true);
   const child = {
@@ -50,9 +55,12 @@ function makeFakeChild(): FakeChild {
         errCb = listener;
       },
     },
-    on: (event: "close" | "error", listener: (arg: never) => void) => {
+    on: (event: "close" | "error", listener: (...args: never[]) => void) => {
       if (event === "close")
-        closeCb = listener as (code: number | null) => void | Promise<void>;
+        closeCb = listener as (
+          code: number | null,
+          signal: NodeJS.Signals | null,
+        ) => void | Promise<void>;
       else errorCb = listener as (err: Error) => void;
     },
     kill,
@@ -62,8 +70,8 @@ function makeFakeChild(): FakeChild {
     kill,
     emitOut: (s) => outCb?.(s),
     emitErr: (s) => errCb?.(s),
-    emitClose: (code) => {
-      void closeCb?.(code);
+    emitClose: (code, signal = null) => {
+      void closeCb?.(code, signal);
     },
     emitError: (err) => errorCb?.(err),
   };
@@ -303,11 +311,26 @@ describe("claudeSkillExecutor cancels on the abort signal", () => {
       expect(fake.kill).toHaveBeenCalledWith("SIGTERM");
       await vi.advanceTimersByTimeAsync(100);
       expect(fake.kill).toHaveBeenCalledWith("SIGKILL");
-      fake.emitClose(null);
-      await expect(promise).rejects.toThrow();
+      fake.emitClose(null, "SIGTERM");
+      await expect(promise).rejects.toThrow(
+        "claude subprocess terminated by signal SIGTERM",
+      );
     } finally {
       vi.useRealTimers();
     }
+  });
+
+  it("names the signal in the error when killed with no exit code", async () => {
+    const db = createInMemoryDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitClose(null, "SIGKILL");
+    await expect(promise).rejects.toThrow(
+      "claude subprocess terminated by signal SIGKILL",
+    );
   });
 });
 
