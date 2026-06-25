@@ -158,9 +158,18 @@ function seedDeriveStep(
 // Map one persisted webhook delivery to derivation triggers and enqueue them.
 // Returns the enqueued cycles, or a `dropped` reason when the event touched no
 // tracked PR. Idempotent at the lifecycle level: re-deriving is always safe.
+//
+// `seen` is an optional set of run ids already triggered by the caller. It is
+// the coalescing key: a run present in it is skipped so it gets at most one
+// cycle, and every run this call triggers is added to it. Callers draining a
+// batch of deliveries pass one shared set so coalescing spans the whole batch
+// **per resolved target** — not per event keyed on its first target, which
+// would drop the later targets of a multi-target event (#232). Omitted ⇒ a
+// fresh per-call set, deduping only within this one event.
 export async function triggerDerivations(
   event: WebhookEvent,
   deps: TriggerDerivationsDependencies,
+  seen = new Set<string>(),
 ): Promise<TriggerDerivationsResult> {
   const targets = eventToTargets(event);
   if (targets.length === 0) {
@@ -173,11 +182,11 @@ export async function triggerDerivations(
   const maxRetries = deps.maxRetries ?? DEFAULT_MAX_RETRIES;
 
   const triggered: DerivationTrigger[] = [];
-  const seen = new Set<string>();
   for (const { repo, prNumber } of prRefs) {
     const run = await findActiveRun(deps.db, repo, prNumber);
     // A PR with no active run is untracked — nothing to re-derive. Dedupe on
-    // run id so multiple targets resolving to the same run enqueue one cycle.
+    // run id (via the caller-supplied or per-call `seen` set) so multiple
+    // targets resolving to the same run enqueue one cycle.
     if (run === undefined || seen.has(run.id)) continue;
     seen.add(run.id);
 

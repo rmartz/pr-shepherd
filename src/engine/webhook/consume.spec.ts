@@ -197,6 +197,47 @@ describe("consumeWebhookEvents collapses bursts for the same PR", () => {
     expect(await db.list(Collections.stepInstances)).toHaveLength(2);
   });
 
+  it("triggers later targets of a multi-target event whose first target was already coalesced", async () => {
+    const db = createInMemoryDb();
+    await db.create(Collections.workflowRuns, makeWorkflowRun({ id: "run-7" }));
+    await db.create(
+      Collections.workflowRuns,
+      makeWorkflowRun({ id: "run-8", prNumber: 8 }),
+    );
+    // First delivery coalesces PR 7. The second delivery resolves to both
+    // PR 7 and PR 8; keying coalescing on its first target (7) alone would
+    // skip the whole event, dropping PR 8's derivation cycle.
+    await db.create(
+      Collections.webhookEvents,
+      makeWebhookEvent({
+        id: "d1",
+        deliveryId: "d1",
+        eventType: WebhookEventType.CheckSuite,
+        payload: makeCheckSuitePayload([7]),
+        receivedAt: 100,
+      }),
+    );
+    await db.create(
+      Collections.webhookEvents,
+      makeWebhookEvent({
+        id: "d2",
+        deliveryId: "d2",
+        eventType: WebhookEventType.CheckSuite,
+        payload: makeCheckSuitePayload([7, 8]),
+        receivedAt: 200,
+      }),
+    );
+
+    const result = await consumeWebhookEvents(
+      makeDeps(db, { newId: uniqueId }),
+      { now: () => 9000 },
+    );
+
+    expect(result.consumed).toBe(2);
+    expect(result.triggered.map((t) => t.prNumber).sort()).toEqual([7, 8]);
+    expect(await db.list(Collections.stepInstances)).toHaveLength(2);
+  });
+
   it("collapses across event types that resolve to the same PR", async () => {
     const db = createInMemoryDb();
     await db.create(Collections.workflowRuns, makeWorkflowRun({ id: "run-7" }));

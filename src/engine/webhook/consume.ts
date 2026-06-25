@@ -1,6 +1,4 @@
 import { Collections } from "@/db/collections";
-import type { WebhookEvent } from "@/db/schemas";
-import { eventToTargets, isBranchTarget } from "./event-target";
 import {
   triggerDerivations,
   type DerivationTrigger,
@@ -22,8 +20,10 @@ import {
 //      each unique `X-GitHub-Delivery` drives at most one derivation cycle.
 //   2. **Burst-collapse** — a flurry of deliveries that all touch the same PR
 //      collapses to a *single* `derive_pr_state` cycle per PR, not one per
-//      event. Coalescing keys on the resolved target (PR number, or push
-//      branch), so distinct PRs still each get their own cycle.
+//      event. Coalescing keys on each delivery's resolved run id, so distinct
+//      PRs still each get their own cycle — and a delivery resolving to several
+//      PRs collapses each independently, never dropping its later targets just
+//      because its first was already collapsed.
 //   3. **Replay / out-of-order tolerance** — deliveries are processed
 //      oldest-first by `receivedAt`, but correctness does **not** depend on
 //      order: the seeded `derive_pr_state` step re-reads PR state from GitHub
@@ -52,18 +52,6 @@ export interface ConsumeWebhookEventsResult {
   triggered: DerivationTrigger[];
 }
 
-// A stable coalescing key for one delivery's first resolved target. Deliveries
-// sharing a key touch the same PR (or push branch) and collapse to one cycle.
-// `undefined` when the delivery names no target — it is still marked processed
-// but drives no derivation.
-function targetKey(event: WebhookEvent): string | undefined {
-  const [target] = eventToTargets(event);
-  if (target === undefined) return undefined;
-  return isBranchTarget(target)
-    ? `branch:${target.repo}:${target.branch}`
-    : `pr:${target.repo}#${String(target.prNumber)}`;
-}
-
 // Drain the unprocessed `webhookEvents` backlog into derivation cycles.
 export async function consumeWebhookEvents(
   deps: TriggerDerivationsDependencies,
@@ -76,17 +64,16 @@ export async function consumeWebhookEvents(
     .sort((a, b) => a.receivedAt - b.receivedAt);
 
   const triggered: DerivationTrigger[] = [];
-  const coalesced = new Set<string>();
+  // Shared across the batch, keyed on resolved run id: a run already triggered
+  // this pass is skipped, collapsing the burst. Threading it through
+  // `triggerDerivations` (rather than keying on each delivery's first target)
+  // coalesces **per target**, so a multi-target delivery still triggers its
+  // later targets even when its first target was already collapsed (#232).
+  const seen = new Set<string>();
   const processedAt = now();
   for (const event of pending) {
-    // Burst-collapse: a delivery whose target was already triggered in this
-    // batch is still marked processed, but drives no second cycle.
-    const key = targetKey(event);
-    if (key === undefined || !coalesced.has(key)) {
-      if (key !== undefined) coalesced.add(key);
-      const result = await triggerDerivations(event, deps);
-      triggered.push(...result.triggered);
-    }
+    const result = await triggerDerivations(event, deps, seen);
+    triggered.push(...result.triggered);
     await deps.db.update(Collections.webhookEvents, event.id, { processedAt });
   }
 
