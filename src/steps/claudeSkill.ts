@@ -48,7 +48,10 @@ export interface SpawnedProcess {
   stderr: SpawnedStream | null;
   on: ((
     event: "close",
-    listener: (code: number | null) => void | Promise<void>,
+    listener: (
+      code: number | null,
+      signal: NodeJS.Signals | null,
+    ) => void | Promise<void>,
   ) => void) &
     ((event: "error", listener: (err: Error) => void) => void);
   kill: (signal?: NodeJS.Signals) => boolean;
@@ -166,7 +169,7 @@ export function createClaudeSkillExecutor(
         reject(err);
       });
 
-      child.on("close", async (code) => {
+      child.on("close", async (code, signal) => {
         if (settled) return;
         settled = true;
         cleanup();
@@ -180,6 +183,13 @@ export function createClaudeSkillExecutor(
           await db.update(Collections.stepInstances, step.id, { logs });
           if (code === 0) {
             resolve({ output: parseSkillOutput(stdout) });
+          } else if (signal !== null) {
+            // Killed by a signal (e.g. the cancel path's SIGTERM/SIGKILL):
+            // `code` is null, so name the signal instead of "code null" so the
+            // abort is identifiable in Firestore and the UI.
+            reject(
+              new Error(`claude subprocess terminated by signal ${signal}`),
+            );
           } else {
             reject(
               new Error(
