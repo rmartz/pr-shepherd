@@ -97,6 +97,21 @@ export interface PrSnapshot {
 // transport; tests inject a fake that returns scripted responses (including
 // rate-limit rejections). `graphql` returns the already-unwrapped `data`
 // object; `restPaginate` returns all pages flattened.
+//
+// REQUIRED CONTRACT — rate-limit translation (#140):
+// Any implementation of this interface MUST translate GitHub's rate-limit
+// responses — HTTP 429 and secondary-rate-limit rejections — into a thrown
+// `GithubRateLimitError` (from `./rate-limit-retry`). This is not optional: the
+// snapshot fetcher wraps every `graphql` / `restPaginate` call in
+// `withRateLimitRetry`, which engages its backoff-and-retry path *only* when the
+// rejection is an `instanceof GithubRateLimitError`. Any other error type — a
+// generic `Error`, a typed Octokit `RequestError`, a raw HTTP error — bypasses
+// the retry entirely and surfaces as an uncaught failure, so a transport that
+// forgets this translation turns every transient rate-limit hit into a hard
+// snapshot failure instead of the intended backoff. The test fakes already obey
+// this (they reject with `GithubRateLimitError` to exercise the retry); the
+// production Octokit/`gh` transport (upcoming, wired when this layer connects to
+// the engine) must do the same.
 export interface GithubReadTransport {
   graphql: <T = unknown>(
     query: string,
