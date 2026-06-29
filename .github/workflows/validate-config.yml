@@ -1,0 +1,31 @@
+name: Validate Config
+
+# Gated to deployment-config inputs: validate-config.mjs reads only files under
+# deployment/** (schema.yml, environments.yml, {env}.yml), so its result is a pure
+# function of that bounded set plus the validator script itself. A path allowlist is
+# therefore safe here (unlike the test/build suite, whose failure domain is unbounded).
+# If the validator is ever extended to read inputs outside deployment/**, widen the
+# paths below to match.
+on:
+  pull_request:
+    paths:
+      - "deployment/**"
+      - "scripts/validate-config.mjs"
+  push:
+    branches: [main]
+    paths:
+      - "deployment/**"
+      - "scripts/validate-config.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-config:
+    name: Validate deployment config
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: node scripts/validate-config.mjs
