@@ -18,6 +18,20 @@ describe("ReviewState: a never-reviewed PR is UNREVIEWED", () => {
     });
     expect(derivePrState(snap).review).toBe(ReviewState.Unreviewed);
   });
+
+  it("ignores COMMENTED reviews (not a verdict)", () => {
+    const snap = makePrSnapshot({
+      reviews: [makeReview({ state: "COMMENTED", commitOid: "oid-head" })],
+    });
+    expect(derivePrState(snap).review).toBe(ReviewState.Unreviewed);
+  });
+
+  it("ignores DISMISSED reviews (not a verdict)", () => {
+    const snap = makePrSnapshot({
+      reviews: [makeReview({ state: "DISMISSED", commitOid: "oid-head" })],
+    });
+    expect(derivePrState(snap).review).toBe(ReviewState.Unreviewed);
+  });
 });
 
 describe("ReviewState: APPROVED when the latest review approves HEAD", () => {
