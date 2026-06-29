@@ -13,10 +13,65 @@ permissions:
   contents: read
 
 jobs:
+  # Classify the PR's changed files so the heavy code jobs can skip on
+  # documentation-only PRs. Default-run / denylist model (issue #258): the
+  # heavy jobs run unless EVERY changed file is provably-inert documentation,
+  # so a new or unanticipated file type fails safe (runs the suite) instead of
+  # open (skips it). Format / file-length / secret-scan are NOT gated here.
+  detect-changes:
+    name: Detect changes
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    outputs:
+      code_changed: ${{ steps.filter.outputs.code_changed }}
+    steps:
+      - uses: actions/checkout@v7
+        with:
+          fetch-depth: 0
+      - id: filter
+        name: Classify changed files
+        env:
+          BASE_REF: ${{ github.base_ref }}
+        run: |
+          # Push events (to main) carry no base_ref — always run the full suite.
+          if [ -z "$BASE_REF" ]; then
+            echo "Not a pull_request event; running full suite."
+            echo "code_changed=true" >> "$GITHUB_OUTPUT"
+            exit 0
+          fi
+
+          # Capture the diff via command substitution so a git failure trips
+          # `-eo pipefail` and surfaces as a visible step failure, rather than
+          # yielding an empty list that would skip the suite (fail open).
+          changed_files="$(git diff --name-only "origin/${BASE_REF}...HEAD")"
+
+          code_changed=false
+          while IFS= read -r file; do
+            [ -z "$file" ] && continue
+            case "$file" in
+              # Inert documentation — safe to skip the heavy code jobs. In a
+              # `case` pattern `*` matches across `/`, so these cover any depth
+              # (e.g. `*.md` matches `docs/a/b.md`; `docs/*` matches `docs/x/y`).
+              *.md | docs/* | LICENSE | *.txt) ;;
+              # Anything else — source, config, lockfile, CI workflow, product
+              # workflow YAML (`workflows/**`), deployment config, asset — means
+              # code that could regress changed. Run the suite.
+              *)
+                code_changed=true
+                break
+                ;;
+            esac
+          done <<< "$changed_files"
+
+          echo "Documentation-only PR: $([ "$code_changed" = false ] && echo yes || echo no)"
+          echo "code_changed=$code_changed" >> "$GITHUB_OUTPUT"
+
   tests:
     name: Tests
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code_changed == 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -26,11 +81,15 @@ jobs:
     name: Lint
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code_changed == 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
       - run: pnpm lint
 
+  # Not gated: Prettier checks markdown formatting too, so Format must run on
+  # documentation-only PRs.
   format:
     name: Format
     runs-on: ubuntu-latest
@@ -44,6 +103,8 @@ jobs:
     name: Build
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code_changed == 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
@@ -53,6 +114,8 @@ jobs:
     name: Typecheck
     runs-on: ubuntu-latest
     timeout-minutes: 10
+    needs: detect-changes
+    if: needs.detect-changes.outputs.code_changed == 'true'
     steps:
       - uses: actions/checkout@v7
       - uses: ./.github/actions/setup
