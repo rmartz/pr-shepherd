@@ -1,7 +1,8 @@
 import { describe, it, expect, vi, beforeEach } from "vitest";
 import { createHostedFirestoreDb } from "../hostedFirestore";
 import { Collections } from "../../collections";
-import { listeners, makeFakeAdmin, makeFakeClient, makeRepo } from "./fixtures";
+import { makeRepo } from "./fixtures";
+import { listeners, makeFakeAdmin, makeFakeClient } from "./fakeAdminQuery";
 
 beforeEach(() => {
   listeners.clear();

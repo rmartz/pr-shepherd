@@ -3,6 +3,7 @@ import type {
   Db,
   FieldIncrements,
   Filter,
+  RangeConstraint,
   SubscriptionCallback,
   Unsubscribe,
 } from "../types";
@@ -88,11 +89,20 @@ export class HostedFirestoreDb implements Db {
     return coll.schema.parse(snap.data());
   }
 
-  async list<T>(coll: CollectionDef<T>, filter?: Filter<T>): Promise<T[]> {
+  async list<T>(
+    coll: CollectionDef<T>,
+    filter?: Filter<T>,
+    range?: RangeConstraint<T>[],
+  ): Promise<T[]> {
     const admin = await this.getAdmin();
     let query: AdminQuery = admin.collection(coll.name);
     for (const f of filterEntries(filter)) {
       query = query.where(f.field, "==", f.value);
+    }
+    // `ComparisonOp`'s string values are exactly Firestore's ordering ops, so
+    // each range constraint forwards verbatim — pushing the window to the DB.
+    for (const c of range ?? []) {
+      query = query.where(c.field, c.op, c.value);
     }
     const snap = await query.get();
     return snap.docs.map((d) => coll.schema.parse(d.data()));
