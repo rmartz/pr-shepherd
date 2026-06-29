@@ -5,4 +5,10 @@ node scripts/check-conflict-markers.mjs --staged
 # commit time. `git commit --no-verify` bypasses; CI remains the backstop.
 node scripts/check-file-length.mjs --staged
 pnpm exec lint-staged
-pnpm run secrets-check
+# Local deployment-config validation (a repo-local script) still runs at commit.
+node scripts/validate-config.mjs
+# Secret scanning has moved out of this repo: vercel-deploy-scripts (which
+# provided the `secrets-check` bin) was removed as an npm dependency and is being
+# consolidated into the standalone `envctl` tool (usage TBD). Until envctl lands,
+# the local pre-commit secret scan is intentionally not run here; CI's
+# secret-scan.yml reusable workflow remains the hard backstop.
