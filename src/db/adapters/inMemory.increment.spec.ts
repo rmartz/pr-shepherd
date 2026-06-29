@@ -1,8 +1,9 @@
 import { describe, it, expect } from "vitest";
 import { createInMemoryDb } from "./inMemory";
 import { Collections } from "../collections";
-import { RunStatus, type WorkflowRun } from "../schemas";
+import type { WorkflowRun } from "../schemas";
 import type { Db } from "../types";
+import { makeRun } from "./test-fixtures";
 
 // ---------------------------------------------------------------------------
 // Tests for the atomic `Db.increment` primitive on the in-memory adapter
@@ -10,29 +11,6 @@ import type { Db } from "../types";
 // run via `increment` rather than a read-modify-write `get` + `update`, so the
 // adapter must apply concurrent increments without dropping a delta.
 // ---------------------------------------------------------------------------
-
-function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-  return {
-    id: "run-1",
-    workflowId: "base-pr",
-    workflowVersion: 1,
-    repo: "rmartz/pr-shepherd",
-    prNumber: 7,
-    prTitle: "test",
-    status: RunStatus.Running,
-    childRunIds: [],
-    context: {},
-    createdAt: 1000,
-    updatedAt: 1000,
-    metrics: {
-      totalClaudeMs: 0,
-      totalActiveMs: 0,
-      totalScheduleWaitMs: 0,
-      totalExternalWaitMs: 0,
-    },
-    ...overrides,
-  };
-}
 
 async function seedRun(db: Db, overrides: Partial<WorkflowRun> = {}) {
   const run = makeRun(overrides);
