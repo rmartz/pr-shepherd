@@ -89,6 +89,21 @@ describe("claudeSkillExecutor streams stdout/stderr into the step logs", () => {
     const final = await db.get(Collections.stepInstances, "s1");
     expect(final?.logs).toEqual(["err-a", "err-b", "out-a", "{}"]);
   });
+
+  it("carries a partial line forward across chunks of the same stream", async () => {
+    const db = makeDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitOut("partial-");
+    fake.emitOut("line\n{}\n");
+    fake.emitClose(0);
+    await promise;
+    const final = await db.get(Collections.stepInstances, "s1");
+    expect(final?.logs).toEqual(["partial-line", "{}"]);
+  });
 });
 
 describe("the runner records metrics.claudeMs for a claude_skill step", () => {
