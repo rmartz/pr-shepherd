@@ -11,11 +11,13 @@
 # the relevant NEXT_PUBLIC_FIREBASE_* keys automatically. Both strict JSON and
 # the JavaScript object literal format produced by the Firebase console are accepted.
 #
-# Pass --sync to also push the updated values to Vercel immediately after writing
-# the YAML (calls sync-env). Without --sync, only the local YAML is updated.
+# Pass --sync to also push the updated values to Vercel after writing the YAML.
+# Without --sync, only the local YAML is updated.
 #
-# To deploy without modifying the YAML, run sync-env directly:
-#   pnpm exec sync-env --env=preview
+# NOTE: pushing config to Vercel previously ran `sync-env` from the
+# vercel-deploy-scripts npm package, which has been removed. That capability is
+# being consolidated into a standalone `envctl` tool (usage TBD). Until envctl
+# ships, --sync cannot push and exits non-zero; the local YAML edit still works.
 #
 # Sensitive values must NEVER be passed as KEY=value arguments — they will appear
 # in shell history and ps output. Use `pnpm exec vercel env add` directly for secrets.
@@ -241,8 +243,12 @@ node "$SCRIPT_DIR/validate-config.mjs" --env="$ENV_NAME"
 
 if [[ "$SYNC" == "true" ]]; then
   echo ""
-  exec pnpm exec sync-env --env="$ENV_NAME"
+  echo "error: --sync is not available. Pushing config to Vercel moved out of" >&2
+  echo "       vercel-deploy-scripts into the 'envctl' tool (usage TBD), which" >&2
+  echo "       is not yet wired up. The local YAML was updated; sync manually" >&2
+  echo "       once envctl ships." >&2
+  exit 1
 fi
 
 echo ""
-echo "YAML updated. Run 'pnpm exec sync-env --env=$ENV_NAME' to push to Vercel."
+echo "YAML updated. Pushing to Vercel will be handled by the 'envctl' tool (usage TBD)."

@@ -1,9 +1,5 @@
 # gitleaks configuration for pr-shepherd
-# Extends the base ruleset from vercel-deploy-scripts (Firebase + Vercel patterns).
-# Only project-specific allowlists belong below.
-
-[extend]
-path = "node_modules/vercel-deploy-scripts/.gitleaks.toml"
+# Uses built-in gitleaks rules. Project-specific allowlists are below.
 
 [allowlist]
 description = "Known safe patterns — placeholder values in documentation and config examples"
