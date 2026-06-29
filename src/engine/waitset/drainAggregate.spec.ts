@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { createInMemoryDb } from "@/db/adapters/inMemory";
 import { Collections } from "@/db/collections";
-import { StepStatus } from "@/db/schemas";
+import { RunStatus, StepStatus } from "@/db/schemas";
 import { aggregateDrainResults } from "./drainAggregate";
 import { makeRun, makeWaitStep } from "./waitset-tests/fixtures";
 
@@ -77,5 +77,41 @@ describe("graceful-drain aggregation rolls steps up per PR", () => {
 
     expect(aggregate.perPr).toEqual([]);
     expect(aggregate.totalInFlight).toBe(0);
+  });
+
+  it("excludes steps belonging to terminal (settled) runs", async () => {
+    const db = createInMemoryDb();
+    // A long-finished run: terminal status, its steps are settled history.
+    await db.create(
+      Collections.workflowRuns,
+      makeRun({ id: "done", prNumber: 7, status: RunStatus.Completed }),
+    );
+    await db.create(
+      Collections.stepInstances,
+      makeWaitStep({ id: "old", runId: "done", status: StepStatus.Completed }),
+    );
+    // An active run still being drained at exit.
+    await db.create(
+      Collections.workflowRuns,
+      makeRun({ id: "live", prNumber: 8, status: RunStatus.Running }),
+    );
+    await db.create(
+      Collections.stepInstances,
+      makeWaitStep({ id: "new", runId: "live", status: StepStatus.Running }),
+    );
+
+    const aggregate = await aggregateDrainResults(db);
+
+    // Only the active run's PR appears; the terminal run is not scanned.
+    expect(aggregate.perPr).toEqual([
+      {
+        repo: "rmartz/pr-shepherd",
+        prNumber: 8,
+        completed: 0,
+        failed: 0,
+        inFlight: 1,
+      },
+    ]);
+    expect(aggregate.totalInFlight).toBe(1);
   });
 });
