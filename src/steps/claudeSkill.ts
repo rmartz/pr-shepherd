@@ -111,6 +111,32 @@ function toLines(text: string): string[] {
   return text.split("\n").filter((line) => line.length > 0);
 }
 
+// Splits a stream's incoming text into complete lines as chunks arrive while
+// carrying any trailing partial line forward, so a line spanning two chunks of
+// the same stream is not split. Returns the completed lines emitted by this
+// chunk; the unterminated remainder is held in `state.partial` until the next
+// chunk completes it or `flushPartial` drains it at close.
+interface LineBuffer {
+  partial: string;
+}
+
+function consumeChunk(state: LineBuffer, text: string): string[] {
+  const combined = state.partial + text;
+  const lastNewline = combined.lastIndexOf("\n");
+  if (lastNewline === -1) {
+    state.partial = combined;
+    return [];
+  }
+  state.partial = combined.slice(lastNewline + 1);
+  return toLines(combined.slice(0, lastNewline));
+}
+
+function flushPartial(state: LineBuffer): string[] {
+  const remainder = state.partial;
+  state.partial = "";
+  return toLines(remainder);
+}
+
 export function createClaudeSkillExecutor(
   db: Db,
   options: CreateClaudeSkillExecutorOptions = {},
@@ -130,8 +156,16 @@ export function createClaudeSkillExecutor(
     const child = spawnFn(command, [input.skill, ...input.args], { env });
 
     return new Promise<ExecutorResult>((resolve, reject) => {
+      // stdout/stderr are kept separate (stdout feeds `parseSkillOutput`,
+      // stderr feeds the error message), but completed lines from both are
+      // appended to a single ordered `logs` buffer as they arrive so the
+      // persisted logs preserve the temporal interleaving of the two streams
+      // rather than showing all stdout before all stderr (#133).
       const stdoutChunks: string[] = [];
       const stderrChunks: string[] = [];
+      const logs: string[] = [];
+      const stdoutLines: LineBuffer = { partial: "" };
+      const stderrLines: LineBuffer = { partial: "" };
       let settled = false;
       let killTimer: ReturnType<typeof setTimeout> | undefined;
 
@@ -154,8 +188,16 @@ export function createClaudeSkillExecutor(
         if (signal !== undefined) signal.removeEventListener("abort", onAbort);
       }
 
-      child.stdout?.on("data", (chunk) => stdoutChunks.push(chunk.toString()));
-      child.stderr?.on("data", (chunk) => stderrChunks.push(chunk.toString()));
+      child.stdout?.on("data", (chunk) => {
+        const text = chunk.toString();
+        stdoutChunks.push(text);
+        logs.push(...consumeChunk(stdoutLines, text));
+      });
+      child.stderr?.on("data", (chunk) => {
+        const text = chunk.toString();
+        stderrChunks.push(text);
+        logs.push(...consumeChunk(stderrLines, text));
+      });
 
       if (signal !== undefined) {
         if (signal.aborted) onAbort();
@@ -175,7 +217,10 @@ export function createClaudeSkillExecutor(
         cleanup();
         const stdout = stdoutChunks.join("");
         const stderr = stderrChunks.join("");
-        const logs = [...toLines(stdout), ...toLines(stderr)];
+        // Drain any unterminated trailing lines (a final write without a
+        // newline). stdout drains before stderr as a deterministic tie-break
+        // for tails that never arrived as complete lines.
+        logs.push(...flushPartial(stdoutLines), ...flushPartial(stderrLines));
         // Persist streamed logs before settling — the runner's terminal write
         // sets status/output/metrics but not logs, so this is the only place
         // they land.

@@ -20,12 +20,11 @@ export enum ComparisonOp {
 // `Filter` (equality only), this expresses ordering comparisons such as
 // `receivedAt >= cutoff`, so an append-only collection can be scanned over a
 // bounded window at the DB layer rather than loaded in full and filtered in
-// memory. `value` is constrained to the field's own type.
-export interface RangeConstraint<T> {
-  field: keyof T & string;
-  op: ComparisonOp;
-  value: T[keyof T & string];
-}
+// memory. The distributive mapped type correlates `value`'s type to the
+// specific chosen `field`, preventing silent type errors at call sites.
+export type RangeConstraint<T> = {
+  [K in keyof T & string]: { field: K; op: ComparisonOp; value: T[K] };
+}[keyof T & string];
 
 // A typed identifier for a collection. Carries the runtime name (used
 // by adapters to key storage) and the Zod schema (used by adapters to

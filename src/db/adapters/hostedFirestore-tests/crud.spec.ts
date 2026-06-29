@@ -3,13 +3,8 @@ import { createHostedFirestoreDb } from "../hostedFirestore";
 import { Collections } from "../../collections";
 import { RunStatus, type Repository, type WorkflowRun } from "../../schemas";
 import { ComparisonOp } from "../../types";
-import {
-  listeners,
-  makeEvent,
-  makeFakeAdmin,
-  makeFakeClient,
-  makeRepo,
-} from "./fixtures";
+import { makeEvent, makeRepo } from "./fixtures";
+import { listeners, makeFakeAdmin, makeFakeClient } from "./fakeAdminQuery";
 
 beforeEach(() => {
   listeners.clear();
