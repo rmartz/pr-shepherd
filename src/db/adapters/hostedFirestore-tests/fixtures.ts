@@ -1,5 +1,9 @@
 import type { ClientFirestoreModule } from "../hostedFirestoreTypes";
-import { RunStatus, type Repository, type WorkflowRun } from "../../schemas";
+import type { Repository } from "../../schemas";
+
+// `makeRun` is shared with the in-memory adapter tests; re-exported here so
+// existing `./fixtures` importers keep working.
+export { makeRun } from "../test-fixtures";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures and in-memory fakes for the hosted Firestore adapter tests.
@@ -22,29 +26,6 @@ export function makeRepo(overrides: Partial<Repository> = {}): Repository {
     workflowMap: { "*": "base-pr" },
     concurrencyMax: 2,
     createdAt: 1716700000000,
-    ...overrides,
-  };
-}
-
-export function makeRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
-  return {
-    id: "run-1",
-    workflowId: "base-pr",
-    workflowVersion: 1,
-    repo: "rmartz/pr-shepherd",
-    prNumber: 7,
-    prTitle: "test",
-    status: RunStatus.Running,
-    childRunIds: [],
-    context: {},
-    createdAt: 1000,
-    updatedAt: 1000,
-    metrics: {
-      totalClaudeMs: 0,
-      totalActiveMs: 0,
-      totalScheduleWaitMs: 0,
-      totalExternalWaitMs: 0,
-    },
     ...overrides,
   };
 }
