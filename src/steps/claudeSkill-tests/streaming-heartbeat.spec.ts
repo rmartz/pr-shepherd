@@ -57,6 +57,53 @@ describe("claudeSkillExecutor streams stdout/stderr into the step logs", () => {
       "err1",
     ]);
   });
+
+  it("interleaves stdout and stderr lines by arrival order", async () => {
+    const db = makeDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitOut("out-1\n");
+    fake.emitErr("err-1\n");
+    fake.emitOut("{}\n");
+    fake.emitErr("err-2\n");
+    fake.emitClose(0);
+    await promise;
+    const final = await db.get(Collections.stepInstances, "s1");
+    expect(final?.logs).toEqual(["out-1", "err-1", "{}", "err-2"]);
+  });
+
+  it("keeps a chunk's own lines contiguous and split correctly", async () => {
+    const db = makeDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitErr("err-a\nerr-b\n");
+    fake.emitOut("out-a\n{}\n");
+    fake.emitClose(0);
+    await promise;
+    const final = await db.get(Collections.stepInstances, "s1");
+    expect(final?.logs).toEqual(["err-a", "err-b", "out-a", "{}"]);
+  });
+
+  it("carries a partial line forward across chunks of the same stream", async () => {
+    const db = makeDb();
+    await seedStep(db);
+    const fake = makeFakeChild();
+    const exec = createClaudeSkillExecutor(db, { spawn: () => fake.child });
+    const step = await db.get(Collections.stepInstances, "s1");
+    const promise = exec(step!, makeNoopRuntime());
+    fake.emitOut("partial-");
+    fake.emitOut("line\n{}\n");
+    fake.emitClose(0);
+    await promise;
+    const final = await db.get(Collections.stepInstances, "s1");
+    expect(final?.logs).toEqual(["partial-line", "{}"]);
+  });
 });
 
 describe("the runner records metrics.claudeMs for a claude_skill step", () => {

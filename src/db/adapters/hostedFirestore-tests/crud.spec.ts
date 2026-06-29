@@ -2,7 +2,9 @@ import { describe, it, expect, beforeEach } from "vitest";
 import { createHostedFirestoreDb } from "../hostedFirestore";
 import { Collections } from "../../collections";
 import { RunStatus, type Repository, type WorkflowRun } from "../../schemas";
-import { listeners, makeFakeAdmin, makeFakeClient, makeRepo } from "./fixtures";
+import { ComparisonOp } from "../../types";
+import { makeEvent, makeRepo } from "./fixtures";
+import { listeners, makeFakeAdmin, makeFakeClient } from "./fakeAdminQuery";
 
 beforeEach(() => {
   listeners.clear();
@@ -150,5 +152,25 @@ describe("Writes go through the injected admin Firestore handle", () => {
     const onlyA = await db.list(Collections.repositories, { owner: "a" });
     expect(onlyA).toHaveLength(1);
     expect(onlyA[0]?.id).toBe("a/x");
+  });
+
+  it("list() applies a range constraint via admin .where(field, op, value)", async () => {
+    const { store, fakeFirestore: adminFs } = makeFakeAdmin();
+    const client = makeFakeClient(store);
+    const db = createHostedFirestoreDb({
+      adminFirestore: adminFs,
+      clientFirestoreModule: client,
+    });
+    await db.create(Collections.webhookEvents, makeEvent(100));
+    await db.create(Collections.webhookEvents, makeEvent(900));
+    const recent = await db.list(Collections.webhookEvents, undefined, [
+      {
+        field: "receivedAt",
+        op: ComparisonOp.GreaterThanOrEqual,
+        value: 500,
+      },
+    ]);
+    expect(recent).toHaveLength(1);
+    expect(recent[0]?.receivedAt).toBe(900);
   });
 });

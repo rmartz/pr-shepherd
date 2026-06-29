@@ -8,14 +8,24 @@
 // must never be hand- or tool-edited.
 const LOCKFILE = /(?:^|\/)(?:pnpm-lock\.yaml|package-lock\.json|yarn\.lock)$/;
 
+// lint-staged runs the returned command strings through the shell, so each
+// file path must be shell-quoted. Without quoting, a staged path containing
+// spaces or shell-special characters would be word-split (or interpreted)
+// before reaching the formatter. Single-quoting is the safest POSIX form: it
+// disables all interpretation; an embedded single quote is escaped via the
+// standard close-quote / escaped-quote / reopen-quote dance ('\'').
+export const quoteArg = (path) => `'${path.replace(/'/g, "'\\''")}'`;
+
+export const prettierCommands = (files) => {
+  const formattable = files.filter((file) => !LOCKFILE.test(file));
+  return formattable.length > 0
+    ? [`prettier --write ${formattable.map(quoteArg).join(" ")}`]
+    : [];
+};
+
 export default {
   "*.{js,mjs,cjs,ts,tsx,jsx}": [
     "eslint --fix --max-warnings 0 --no-warn-ignored",
   ],
-  "*.{js,mjs,cjs,ts,tsx,jsx,json,md,yml,yaml}": (files) => {
-    const formattable = files.filter((file) => !LOCKFILE.test(file));
-    return formattable.length > 0
-      ? [`prettier --write ${formattable.join(" ")}`]
-      : [];
-  },
+  "*.{js,mjs,cjs,ts,tsx,jsx,json,md,yml,yaml}": prettierCommands,
 };

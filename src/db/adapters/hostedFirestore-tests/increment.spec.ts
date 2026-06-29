@@ -1,13 +1,13 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import { createHostedFirestoreDb } from "../hostedFirestore";
 import { Collections } from "../../collections";
+import { makeRun } from "../test-fixtures";
 import {
   listeners,
   makeFakeAdmin,
   makeFakeClient,
   makeFakeIncrement,
-  makeRun,
-} from "./fixtures";
+} from "./fakeAdminQuery";
 
 beforeEach(() => {
   listeners.clear();

@@ -39,7 +39,7 @@ export default defineConfig({
         test: {
           name: "tooling",
           environment: "node",
-          include: ["scripts/**/*.spec.mjs", "*.spec.ts"],
+          include: ["scripts/**/*.spec.mjs", "*.spec.mjs", "*.spec.ts"],
         },
       },
     ],

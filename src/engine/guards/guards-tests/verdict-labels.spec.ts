@@ -60,4 +60,31 @@ describe("Atomic verdict-label reconciliation: heal contradictory labels", () =>
     });
     expect(healVerdict(["Engine"])).toEqual({ add: [], remove: [] });
   });
+
+  // Guards against the tech-debt failure mode (#194): if precedence ever stops
+  // covering a `VerdictLabel` member, the winner would be undefined and the heal
+  // would strip *all* present verdicts. Healing every full set of verdicts must
+  // always keep exactly one — the highest-precedence — so exactly one survives.
+  it("always keeps exactly one verdict when every verdict is present", () => {
+    const allVerdicts = Object.values(VerdictLabel);
+    const mutation = healVerdict(allVerdicts);
+    expect(mutation.remove).toHaveLength(allVerdicts.length - 1);
+    expect(mutation.remove).not.toContain(VerdictLabel.EscalationNeeded);
+  });
+
+  it("keeps the higher-precedence verdict in every pairwise contradiction", () => {
+    // Most → least urgent. Each earlier member must survive against each later.
+    const byPrecedence = [
+      VerdictLabel.EscalationNeeded,
+      VerdictLabel.ChangesRequested,
+      VerdictLabel.ReviewRequested,
+      VerdictLabel.Approved,
+    ];
+    byPrecedence.forEach((winner, i) => {
+      byPrecedence.slice(i + 1).forEach((loser) => {
+        const mutation = healVerdict([loser, winner]);
+        expect(mutation.remove).toEqual([loser]);
+      });
+    });
+  });
 });

@@ -74,19 +74,32 @@ export function reconcileVerdict(
 // a contradiction resolves toward the state that keeps the PR *out* of merge,
 // never toward a spurious `approved`. With zero or one verdict label present the
 // PR is already consistent and the mutation is empty.
-const HEAL_PRECEDENCE: readonly VerdictLabel[] = [
-  VerdictLabel.EscalationNeeded,
-  VerdictLabel.ChangesRequested,
-  VerdictLabel.ReviewRequested,
-  VerdictLabel.Approved,
-];
+//
+// Precedence is a `Record` keyed by `VerdictLabel`, not an ordered array, so the
+// type system *forces* it to stay exhaustive: a future `VerdictLabel` member
+// added without a rank here is a compile error (`Property '<member>' is missing
+// in type`), not a silent runtime gap. Lower rank = higher precedence. This is
+// what makes the winner below provably defined — without it, a missing entry
+// would let `healVerdict` strip *all* present verdicts instead of keeping one.
+const HEAL_PRECEDENCE: Record<VerdictLabel, number> = {
+  [VerdictLabel.Approved]: 3,
+  [VerdictLabel.ChangesRequested]: 1,
+  [VerdictLabel.EscalationNeeded]: 0,
+  [VerdictLabel.ReviewRequested]: 2,
+};
 
 export function healVerdict(labels: readonly string[]): LabelMutation {
   const present = currentVerdicts(labels);
   if (present.length <= 1) {
     return { add: [], remove: [] };
   }
-  const winner = HEAL_PRECEDENCE.find((label) => present.includes(label));
+  // `present` has at least two members and every `VerdictLabel` has a rank in
+  // the exhaustive `HEAL_PRECEDENCE` record, so `reduce` always yields a real
+  // winner — never `undefined`. The highest-precedence (lowest-rank) verdict is
+  // kept; all others are removed.
+  const winner = present.reduce((best, label) =>
+    HEAL_PRECEDENCE[label] < HEAL_PRECEDENCE[best] ? label : best,
+  );
   return {
     add: [],
     remove: present.filter((label) => label !== winner),
