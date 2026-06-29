@@ -20,8 +20,14 @@ export interface AdminQuerySnapshot {
   docs: { id: string; data: () => unknown }[];
 }
 
+// The subset of Firestore's `WhereFilterOp` the adapter emits: equality for
+// the existing `Filter` path, plus the four ordering operators for range
+// constraints. `ComparisonOp`'s string values match these so they pass
+// through verbatim.
+export type AdminWhereOp = "==" | ">" | ">=" | "<" | "<=";
+
 export interface AdminQuery {
-  where: (field: string, op: "==", value: unknown) => AdminQuery;
+  where: (field: string, op: AdminWhereOp, value: unknown) => AdminQuery;
   get: () => Promise<AdminQuerySnapshot>;
   // Admin-SDK realtime listener. Returns a synchronous unsubscribe handle.
   // `onError` receives a transient stream failure; after it fires no further

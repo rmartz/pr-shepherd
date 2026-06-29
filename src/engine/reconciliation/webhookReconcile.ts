@@ -1,7 +1,7 @@
 import type { Config } from "@/config";
 import { Collections } from "@/db/collections";
 import type { WebhookEvent } from "@/db/schemas";
-import type { Db } from "@/db/types";
+import { ComparisonOp, type Db } from "@/db/types";
 import {
   runSelfDiscoveryPass,
   type SelfDiscoveryPassOptions,
@@ -100,10 +100,20 @@ export async function reconcileWebhookEvents(
   const lookbackMs = deps.lookbackMs ?? DEFAULT_LOOKBACK_MS;
   const cutoff = now() - lookbackMs;
 
-  const events = await deps.db.list(Collections.webhookEvents);
-  const recent = events
-    .filter((event) => event.receivedAt >= cutoff)
-    .sort((a, b) => a.receivedAt - b.receivedAt);
+  // Push the lookback window to the DB layer: `webhookEvents` is append-only
+  // and unbounded, so an unfiltered `list` would scan the entire archive every
+  // pass. The `receivedAt >= cutoff` range constraint keeps the scan
+  // proportional to the window instead. Ordering still happens here — the
+  // bounded result set is small.
+  const recent = (
+    await deps.db.list(Collections.webhookEvents, undefined, [
+      {
+        field: "receivedAt",
+        op: ComparisonOp.GreaterThanOrEqual,
+        value: cutoff,
+      },
+    ])
+  ).sort((a, b) => a.receivedAt - b.receivedAt);
 
   const retriggered: string[] = [];
   const skipped: SkippedDelivery[] = [];

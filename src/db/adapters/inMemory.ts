@@ -1,8 +1,10 @@
+import { ComparisonOp } from "../types";
 import type {
   CollectionDef,
   Db,
   FieldIncrements,
   Filter,
+  RangeConstraint,
   SubscriptionCallback,
   Unsubscribe,
 } from "../types";
@@ -55,6 +57,33 @@ function matchesFilter<T>(doc: T, filter: Filter<T> | undefined): boolean {
     if (doc[key] !== filter[key]) return false;
   }
   return true;
+}
+
+// Evaluate one range constraint against a document, mirroring the operators
+// the hosted adapter forwards to Firestore's `query.where`. The comparison is
+// the JS relational comparison on the field's own value, so it works for
+// numbers (the `receivedAt` window) and any other ordered scalar.
+function matchesRange<T>(doc: T, c: RangeConstraint<T>): boolean {
+  const actual = doc[c.field as keyof T];
+  switch (c.op) {
+    case ComparisonOp.GreaterThan:
+      return actual > c.value;
+    case ComparisonOp.GreaterThanOrEqual:
+      return actual >= c.value;
+    case ComparisonOp.LessThan:
+      return actual < c.value;
+    case ComparisonOp.LessThanOrEqual:
+      return actual <= c.value;
+  }
+}
+
+function matchesQuery<T>(
+  doc: T,
+  filter: Filter<T> | undefined,
+  range: RangeConstraint<T>[] | undefined,
+): boolean {
+  if (!matchesFilter(doc, filter)) return false;
+  return (range ?? []).every((c) => matchesRange(doc, c));
 }
 
 class InMemoryDb implements Db {
@@ -112,9 +141,13 @@ class InMemoryDb implements Db {
     return this.store(coll).get(id);
   }
 
-  async list<T>(coll: CollectionDef<T>, filter?: Filter<T>): Promise<T[]> {
+  async list<T>(
+    coll: CollectionDef<T>,
+    filter?: Filter<T>,
+    range?: RangeConstraint<T>[],
+  ): Promise<T[]> {
     const all = Array.from(this.store(coll).values());
-    return all.filter((doc) => matchesFilter(doc, filter));
+    return all.filter((doc) => matchesQuery(doc, filter, range));
   }
 
   async create<T>(coll: CollectionDef<T>, doc: T): Promise<void> {

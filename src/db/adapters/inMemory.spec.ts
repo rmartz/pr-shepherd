@@ -2,7 +2,12 @@ import { describe, it, expect, vi } from "vitest";
 import { createInMemoryDb } from "./inMemory";
 import { createDb, DbAdapterKind } from "../index";
 import { Collections } from "../collections";
-import type { Repository } from "../schemas";
+import {
+  WebhookEventType,
+  type Repository,
+  type WebhookEvent,
+} from "../schemas";
+import { ComparisonOp } from "../types";
 
 function makeRepo(overrides: Partial<Repository> = {}): Repository {
   return {
@@ -163,6 +168,62 @@ describe("Filter handles undefined values as 'not specified'", () => {
     const owner: string | undefined = undefined;
     const result = await db.list(Collections.repositories, { owner });
     expect(result).toHaveLength(2);
+  });
+});
+
+describe("list applies range constraints over an ordered field", () => {
+  function makeEvent(receivedAt: number): WebhookEvent {
+    return {
+      id: `evt-${String(receivedAt)}`,
+      deliveryId: `evt-${String(receivedAt)}`,
+      eventType: WebhookEventType.PullRequest,
+      payload: { action: "opened" },
+      receivedAt,
+    };
+  }
+
+  it("returns only documents at or above a >= threshold", async () => {
+    const db = createInMemoryDb();
+    await db.create(Collections.webhookEvents, makeEvent(100));
+    await db.create(Collections.webhookEvents, makeEvent(500));
+    await db.create(Collections.webhookEvents, makeEvent(900));
+    const recent = await db.list(Collections.webhookEvents, undefined, [
+      {
+        field: "receivedAt",
+        op: ComparisonOp.GreaterThanOrEqual,
+        value: 500,
+      },
+    ]);
+    expect(recent.map((e) => e.receivedAt).sort((a, b) => a - b)).toEqual([
+      500, 900,
+    ]);
+  });
+
+  it("ANDs a range constraint with an equality filter", async () => {
+    const db = createInMemoryDb();
+    await db.create(Collections.webhookEvents, {
+      ...makeEvent(900),
+      eventType: WebhookEventType.PullRequest,
+    });
+    await db.create(Collections.webhookEvents, {
+      ...makeEvent(950),
+      id: "push-950",
+      deliveryId: "push-950",
+      eventType: WebhookEventType.Push,
+    });
+    const recentPrEvents = await db.list(
+      Collections.webhookEvents,
+      { eventType: WebhookEventType.PullRequest },
+      [
+        {
+          field: "receivedAt",
+          op: ComparisonOp.GreaterThanOrEqual,
+          value: 500,
+        },
+      ],
+    );
+    expect(recentPrEvents).toHaveLength(1);
+    expect(recentPrEvents[0]?.eventType).toBe(WebhookEventType.PullRequest);
   });
 });
 

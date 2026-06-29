@@ -1,9 +1,9 @@
-import { describe, expect, it } from "vitest";
+import { describe, expect, it, vi } from "vitest";
 import type { Config, WorkflowGraph } from "@/config";
 import { createDb, DbAdapterKind } from "@/db";
 import { Collections } from "@/db/collections";
 import { StepStatus, StepType, type WorkflowRun } from "@/db/schemas";
-import type { Db } from "@/db/types";
+import { ComparisonOp, type Db, type RangeConstraint } from "@/db/types";
 import type { DiscoveredPr, PrReadTransport } from "@/engine/discovery";
 import {
   makeConfig,
@@ -134,6 +134,34 @@ describe("reconciliation catch: re-derives a PR whose webhook trigger was missed
     expect(report.retriggered).toEqual([]);
     const steps = await db.list(Collections.stepInstances);
     expect(steps).toHaveLength(0);
+  });
+});
+
+describe("pushes the receivedAt window to the DB layer", () => {
+  it("queries webhookEvents with a receivedAt >= cutoff range constraint, not an unfiltered scan", async () => {
+    const db = freshDb();
+    await seedTrackedRun(db, { id: "run-7", prNumber: 7 });
+    const listSpy = vi.spyOn(db, "list");
+
+    await reconcileWebhookEvents(reconcileFor(db, { lookbackMs: 2000 }));
+
+    // now=10_000, lookback=2_000 ⇒ cutoff=8_000. The webhookEvents read must
+    // carry that cutoff as a range constraint so the scan is bounded at the DB
+    // layer rather than the whole collection being loaded and filtered here.
+    const webhookListCall = listSpy.mock.calls.find(
+      (call) => call[0].name === Collections.webhookEvents.name,
+    );
+    expect(webhookListCall).toBeDefined();
+    const range = webhookListCall?.[2] as
+      | RangeConstraint<{ receivedAt: number }>[]
+      | undefined;
+    expect(range).toEqual([
+      {
+        field: "receivedAt",
+        op: ComparisonOp.GreaterThanOrEqual,
+        value: 8000,
+      },
+    ]);
   });
 });
 

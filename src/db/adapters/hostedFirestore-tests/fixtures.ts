@@ -1,5 +1,11 @@
 import type { ClientFirestoreModule } from "../hostedFirestoreTypes";
-import { RunStatus, type Repository, type WorkflowRun } from "../../schemas";
+import {
+  RunStatus,
+  WebhookEventType,
+  type Repository,
+  type WebhookEvent,
+  type WorkflowRun,
+} from "../../schemas";
 
 // ---------------------------------------------------------------------------
 // Shared fixtures and in-memory fakes for the hosted Firestore adapter tests.
@@ -23,6 +29,19 @@ export function makeRepo(overrides: Partial<Repository> = {}): Repository {
     concurrencyMax: 2,
     createdAt: 1716700000000,
     ...overrides,
+  };
+}
+
+// A webhook delivery received at `receivedAt`. The id/deliveryId derive from
+// the timestamp so distinct timestamps are distinct documents — handy for the
+// range-query tests, which assert which deliveries fall inside a window.
+export function makeEvent(receivedAt: number): WebhookEvent {
+  return {
+    id: `evt-${String(receivedAt)}`,
+    deliveryId: `evt-${String(receivedAt)}`,
+    eventType: WebhookEventType.PullRequest,
+    payload: { action: "opened" },
+    receivedAt,
   };
 }
 
@@ -113,15 +132,42 @@ function applyNestedPath(
   });
 }
 
+interface FakeWhere {
+  field: string;
+  op: string;
+  value: unknown;
+}
+
+// Evaluate one `where` clause against a doc, mirroring Firestore's operators.
+function matchesWhere(data: Record<string, unknown>, f: FakeWhere): boolean {
+  const actual = data[f.field];
+  switch (f.op) {
+    case "==":
+      return actual === f.value;
+    case ">":
+      return (actual as number) > (f.value as number);
+    case ">=":
+      return (actual as number) >= (f.value as number);
+    case "<":
+      return (actual as number) < (f.value as number);
+    case "<=":
+      return (actual as number) <= (f.value as number);
+    default:
+      throw new Error(`Fake does not support op ${f.op}`);
+  }
+}
+
 export class FakeAdminQuery {
   constructor(
     private readonly store: Map<string, unknown>,
-    private readonly filters: { field: string; value: unknown }[] = [],
+    private readonly filters: FakeWhere[] = [],
   ) {}
 
   where(field: string, op: string, value: unknown): FakeAdminQuery {
-    if (op !== "==") throw new Error(`Fake only supports == (got ${op})`);
-    return new FakeAdminQuery(this.store, [...this.filters, { field, value }]);
+    return new FakeAdminQuery(this.store, [
+      ...this.filters,
+      { field, op, value },
+    ]);
   }
 
   // Admin-SDK realtime listener fake. Mirrors the real `Query.onSnapshot`:
@@ -138,8 +184,8 @@ export class FakeAdminQuery {
     const dispatch = (): void => {
       const docs = Array.from(store.entries())
         .filter(([, data]) =>
-          filters.every(
-            (f) => (data as Record<string, unknown>)[f.field] === f.value,
+          filters.every((f) =>
+            matchesWhere(data as Record<string, unknown>, f),
           ),
         )
         .map(([id, data]) => ({ id, data: () => data }));
@@ -161,8 +207,8 @@ export class FakeAdminQuery {
   async get(): Promise<FakeQuerySnapshot> {
     const docs: FakeQuerySnapshotDoc[] = [];
     for (const [id, data] of this.store.entries()) {
-      const match = this.filters.every(
-        (f) => (data as Record<string, unknown>)[f.field] === f.value,
+      const match = this.filters.every((f) =>
+        matchesWhere(data as Record<string, unknown>, f),
       );
       if (match) docs.push({ id, data: () => data });
     }

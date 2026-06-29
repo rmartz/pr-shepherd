@@ -5,6 +5,28 @@ import type { ZodType } from "zod";
 // documents in the collection.
 export type Filter<T> = Partial<T>;
 
+// Comparison operators for a range constraint. Kept alphabetical to
+// minimize merge conflicts. The string values match Firestore's
+// `WhereFilterOp` so the hosted adapter forwards them to `query.where()`
+// verbatim, while the in-memory adapter evaluates them against each doc.
+export enum ComparisonOp {
+  GreaterThan = ">",
+  GreaterThanOrEqual = ">=",
+  LessThan = "<",
+  LessThanOrEqual = "<=",
+}
+
+// A single range predicate over one field: `doc[field] <op> value`. Unlike
+// `Filter` (equality only), this expresses ordering comparisons such as
+// `receivedAt >= cutoff`, so an append-only collection can be scanned over a
+// bounded window at the DB layer rather than loaded in full and filtered in
+// memory. `value` is constrained to the field's own type.
+export interface RangeConstraint<T> {
+  field: keyof T & string;
+  op: ComparisonOp;
+  value: T[keyof T & string];
+}
+
 // A typed identifier for a collection. Carries the runtime name (used
 // by adapters to key storage) and the Zod schema (used by adapters to
 // validate documents on the way in and out).
@@ -34,7 +56,15 @@ export type Unsubscribe = () => void;
 // LevelDB adapter all implement it.
 export interface Db {
   get<T>(coll: CollectionDef<T>, id: string): Promise<T | undefined>;
-  list<T>(coll: CollectionDef<T>, filter?: Filter<T>): Promise<T[]>;
+  // `filter` matches on field equality (unchanged). `range` adds ordering
+  // constraints (e.g. `receivedAt >= cutoff`) ANDed with the equality filter,
+  // letting an unbounded append-only collection be scanned over a bounded
+  // window at the DB layer instead of loaded in full and filtered in memory.
+  list<T>(
+    coll: CollectionDef<T>,
+    filter?: Filter<T>,
+    range?: RangeConstraint<T>[],
+  ): Promise<T[]>;
   create<T>(coll: CollectionDef<T>, doc: T): Promise<void>;
   update<T>(
     coll: CollectionDef<T>,

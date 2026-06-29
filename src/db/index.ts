@@ -10,9 +10,11 @@ export type {
   CollectionDef,
   Db,
   Filter,
+  RangeConstraint,
   SubscriptionCallback,
   Unsubscribe,
 } from "./types";
+export { ComparisonOp } from "./types";
 export { Collections } from "./collections";
 export * from "./schemas";
 
