@@ -1,0 +1,31 @@
+name: Package Version Check
+
+# Gated to package-manifest inputs: check-package-versions.mjs reads only
+# package.json, so its result is a pure function of that file plus the checker
+# script itself. A path allowlist is therefore safe here (unlike the test/build
+# suite, whose failure domain is unbounded) and keeps the check off PRs that
+# don't touch dependencies. If the checker is extended to read other manifests
+# (e.g. workspace packages), widen the paths below to match.
+on:
+  pull_request:
+    paths:
+      - "package.json"
+      - "scripts/check-package-versions.mjs"
+  push:
+    branches: [main]
+    paths:
+      - "package.json"
+      - "scripts/check-package-versions.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  package-version-check:
+    name: Check package.json version pins
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@v7
+      - uses: ./.github/actions/setup
+      - run: node scripts/check-package-versions.mjs
