@@ -1,7 +1,9 @@
 # npm groups are restricted to minor and patch bumps so a batch PR never mixes
 # low-risk version churn with a breaking change. Major bumps match no group and
 # are raised as individual PRs, isolating the changes most likely to require code
-# updates for separate review.
+# updates for separate review. Prettier is the one called-out exception below: a
+# code formatter whose minor bumps can reformat the tree (or fail CI's format
+# check), so its major/minor bumps are split into their own PR.
 version: 2
 updates:
   - package-ecosystem: npm
@@ -14,6 +16,18 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
+      # Prettier is a code formatter: even a minor bump can reformat the tree and
+      # force code changes (or fail CI's format check), so isolate its major/minor
+      # bumps into their own PR for focused review. Listed first to win group
+      # assignment (a dependency joins the first group it fully matches). Patch
+      # bumps are intentionally excluded here, so a trivial Prettier patch falls
+      # through to `dev-dependencies` and rides along with the normal batch.
+      prettier:
+        patterns:
+          - "prettier"
+        update-types:
+          - "major"
+          - "minor"
       dev-dependencies:
         dependency-type: development
         update-types:
