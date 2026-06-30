@@ -7,6 +7,7 @@ PR Shepherd is a locally-hosted Node.js daemon that drives PRs through review/fi
 ## Package Manager
 
 - Always use `pnpm`. Never `npm` or `yarn`.
+- **Pin full versions in `package.json`.** Every dependency version specifier must be a complete `major.minor.patch` (e.g. `^4.3.1`, `~26.0.0`, or an exact `19.2.7`) — never a truncated `^4` or `^19`. The range annotation (`^` / `~` / exact) is the author's choice; the **completeness** of the version is not. A truncated specifier lets a Dependabot minor/patch bump land with **no `package.json` change** (only a `pnpm-lock.yaml` change), hiding the update from the manifest and from reviewers — and a silent bump of a format-affecting tool like Prettier then surfaces only as a CI failure (cf. rmartz/trip-split#114). A full pin makes every accepted bump a visible `package.json` diff. When a Dependabot PR (or a manual bump) raises the resolved version, update the `package.json` floor to match.
 
 ## Common Commands
 
