@@ -30,3 +30,39 @@ describe("a cached snapshot is reused within the TTL and refetched after it expi
     expect(transport.graphql).toHaveBeenCalledTimes(2);
   });
 });
+
+describe("expired entries are proactively evicted on write, not just on read (#128)", () => {
+  const OTHER = { owner: "rmartz", repo: "pr-shepherd", prNumber: 42 };
+
+  it("drops an expired entry for one PR when a different PR is written", async () => {
+    const transport = makeTransport();
+    const cache = createSnapshotCache();
+    let clock = 1000;
+    const now = () => clock;
+
+    await fetchPrSnapshot(transport, TARGET, { cache, now, ttlMs: 120_000 });
+    expect(cache.entries.size).toBe(1);
+
+    clock = 1000 + 121_000; // TARGET's entry is now past its TTL
+    await fetchPrSnapshot(transport, OTHER, { cache, now, ttlMs: 120_000 });
+
+    expect(cache.entries.size).toBe(1);
+    expect(cache.entries.has("rmartz/pr-shepherd#42")).toBe(true);
+    expect(cache.entries.has("rmartz/pr-shepherd#7")).toBe(false);
+  });
+
+  it("retains an unexpired entry for one PR when a different PR is written", async () => {
+    const transport = makeTransport();
+    const cache = createSnapshotCache();
+    let clock = 1000;
+    const now = () => clock;
+
+    await fetchPrSnapshot(transport, TARGET, { cache, now, ttlMs: 120_000 });
+    clock = 1000 + 60_000; // TARGET's entry is still within its TTL
+    await fetchPrSnapshot(transport, OTHER, { cache, now, ttlMs: 120_000 });
+
+    expect(cache.entries.size).toBe(2);
+    expect(cache.entries.has("rmartz/pr-shepherd#7")).toBe(true);
+    expect(cache.entries.has("rmartz/pr-shepherd#42")).toBe(true);
+  });
+});
