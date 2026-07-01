@@ -1,12 +1,21 @@
+# Root-only guard (#185): these checks run only for manual commits in the
+# primary checkout. A linked worktree's `.git` is a FILE (a gitdir pointer); the
+# primary checkout's `.git` is a DIRECTORY. Skip in any linked worktree —
+# node_modules (needed by lint-staged) may be absent there, and agent worktrees
+# get the zero-dep file-length guard via claude/hooks/pre-commit instead.
+if [ -f .git ]; then
+  exit 0
+fi
 # Block staged merge-conflict markers first — before lint-staged's prettier can
 # reflow and corrupt them. `--no-verify` or ALLOW_CONFLICT_MARKERS=1 bypasses.
 node scripts/check-conflict-markers.mjs --staged
-# File-length hard cap on staged TS files — same check CI enforces, caught at
-# commit time. `git commit --no-verify` bypasses; CI remains the backstop.
-node scripts/check-file-length.mjs --staged
 pnpm exec lint-staged
 # Local deployment-config validation (a repo-local script) still runs at commit.
 node scripts/validate-config.mjs
+# The file-length hard cap now lives in claude/hooks/pre-commit so it runs in
+# every worktree (agent worktrees included); claude/hooks/pre-commit dispatches
+# here for the primary checkout. CI's file-length.yml remains the backstop.
+#
 # Secret scanning has moved out of this repo: vercel-deploy-scripts (which
 # provided the `secrets-check` bin) was removed as an npm dependency and is being
 # consolidated into the standalone `envctl` tool (usage TBD). Until envctl lands,
