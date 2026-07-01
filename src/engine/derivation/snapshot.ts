@@ -87,6 +87,13 @@ export async function fetchPrSnapshot(
     return existing.promise;
   }
 
+  // Sweep stale keys before inserting the new one. Expired entries are
+  // otherwise only reclaimed on a read of that exact key, so a long-lived
+  // engine processing many distinct PRs would grow the map without bound
+  // (#128). A miss already pays for a real fetch, so an O(n) sweep here is
+  // negligible and keeps the map proportional to the live working set.
+  sweepExpired(cache, now());
+
   const promise = runFetch(transport, target, options);
   cache.entries.set(key, { promise, expiresAt: now() + ttlMs });
   // A rejected fetch must not poison the cache — drop it so the next call
@@ -96,6 +103,12 @@ export async function fetchPrSnapshot(
     if (current?.promise === promise) cache.entries.delete(key);
   });
   return promise;
+}
+
+function sweepExpired(cache: SnapshotCache, nowMs: number): void {
+  for (const [key, entry] of cache.entries) {
+    if (nowMs >= entry.expiresAt) cache.entries.delete(key);
+  }
 }
 
 function cacheKey(
