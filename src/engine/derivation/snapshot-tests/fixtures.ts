@@ -99,5 +99,8 @@ export function makeTransport(): GithubReadTransport & {
     (path: string): Promise<unknown[]> =>
       Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : REST_COMMENTS),
   );
-  return { graphql, restPaginate } as never;
+  return { graphql, restPaginate } as unknown as GithubReadTransport & {
+    graphql: ReturnType<typeof vi.fn>;
+    restPaginate: ReturnType<typeof vi.fn>;
+  };
 }
