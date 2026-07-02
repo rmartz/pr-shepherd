@@ -25,7 +25,20 @@ The step executors read and write GitHub through injected transport seams so the
 
 ## Write transport
 
-The `GithubTransport` (`call(action)`) that `github_api` (#46) depends on — mapping each `GithubActionType` to a `gh` mutation and translating rate limits into the `rate_limited` result kind — is the companion piece, tracked alongside the read transport in #290.
+`createGithubWriteTransport(exec?)` implements `GithubTransport` (`call(action)`), the mutation seam `github_api` (#46) depends on. `buildActionCommand` (pure) maps each single-call `GithubActionType` to its `gh` invocation; the transport dispatches it, then maps the result to a `GithubTransportResult`:
+
+- **`rate_limited`** — checked first on every path, so the executor's backoff engages.
+- **`error`** — a failed `gh` call, marked `retriable` only for transient signatures (5xx / network / timeout); a 4xx is not retriable.
+- **`ok`** — with the parsed response body as `data`.
+
+**String fields use `-f` (raw-field), never `-F`:** `-F` interprets a leading `@` as "read from file", which would corrupt a body like `@dependabot rebase` or an `@`-prefixed label/comment. Only the numeric `line` uses `-F`.
+
+Two actions are not single calls:
+
+- **`resolve_thread`** is a GraphQL `resolveReviewThread` mutation (sent via `gh api graphql --input -`).
+- **`authorize_ci`** is multi-step: read the PR HEAD sha, list the workflow runs in `action_required` for it, and approve each. Any failed step short-circuits to that step's result. (Re-examined for #290: no schema change makes it a single call — the run discovery is intrinsic — so it lives in the transport.)
+
+**Contract note:** `post_inline_comment` now carries a `commit_id` (the PR HEAD sha), added to the action schema so the transport does not have to re-fetch it — the emitting review skill already knows the HEAD.
 
 ## Related
 
