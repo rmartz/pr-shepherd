@@ -12,6 +12,7 @@ import type { Db } from "@/db/types";
 import {
   CIState,
   ReviewState,
+  createSnapshotCache,
   type GithubReadTransport,
 } from "@/engine/derivation";
 import { createRunner } from "@/engine/runner";
@@ -94,6 +95,28 @@ function makeTransport(): GithubReadTransport & {
     (path: string): Promise<unknown[]> =>
       Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : []),
   );
+  return { graphql, restPaginate } as never;
+}
+
+// A transport whose first `/reviews` read returns no reviews (PR not yet
+// approved) and every subsequent read returns an APPROVED review — modelling an
+// approval landing between two derivations. Used to prove the executor reads
+// live state each tick rather than serving a stale cached snapshot (#254).
+function makeApprovalFlippingTransport(): GithubReadTransport & {
+  graphql: ReturnType<typeof vi.fn>;
+  restPaginate: ReturnType<typeof vi.fn>;
+} {
+  let reviewsReads = 0;
+  const graphql = vi.fn(
+    (): Promise<unknown> => Promise.resolve(graphqlResponse()),
+  );
+  const restPaginate = vi.fn((path: string): Promise<unknown[]> => {
+    if (!path.includes("/reviews")) {
+      return Promise.resolve([]);
+    }
+    reviewsReads += 1;
+    return Promise.resolve(reviewsReads === 1 ? [] : REST_REVIEWS);
+  });
   return { graphql, restPaginate } as never;
 }
 
@@ -190,6 +213,40 @@ describe("createDerivePrStateExecutor returns the derived axis vector as output.
       name: "pr-shepherd",
       number: 99,
     });
+  });
+});
+
+describe("createDerivePrStateExecutor derives live state on each invocation", () => {
+  it("reflects an approval added between two derivations rather than a stale snapshot", async () => {
+    const db = createInMemoryDb();
+    await seedRun(db);
+    const step = await seedStep(db);
+    const transport = makeApprovalFlippingTransport();
+
+    const executor = createDerivePrStateExecutor({ db, transport });
+    const first = await executor(step, makeNoopRuntime());
+    const second = await executor(step, makeNoopRuntime());
+
+    expect(first.output["state"]).not.toMatchObject({
+      review: ReviewState.Approved,
+    });
+    expect(second.output["state"]).toMatchObject({
+      review: ReviewState.Approved,
+    });
+  });
+
+  it("dedupes the fetch across invocations when a shared cache is injected", async () => {
+    const db = createInMemoryDb();
+    await seedRun(db);
+    const step = await seedStep(db);
+    const transport = makeTransport();
+    const cache = createSnapshotCache();
+
+    const executor = createDerivePrStateExecutor({ db, transport, cache });
+    await executor(step, makeNoopRuntime());
+    await executor(step, makeNoopRuntime());
+
+    expect(transport.graphql).toHaveBeenCalledTimes(1);
   });
 });
 

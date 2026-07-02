@@ -46,8 +46,10 @@ export interface DerivePrStateDependencies {
   transport: GithubReadTransport;
   // Used to read the run (`repo`, `prNumber`) that the step belongs to.
   db: Db;
-  // Optional shared TTL cache so concurrent/repeat derivations of the same PR
-  // share a single underlying fetch. Defaults to a per-executor cache.
+  // Optional shared TTL cache. By default each invocation gets a fresh cache so
+  // every derivation reads live GitHub state rather than a stale cross-tick
+  // snapshot (#254). Inject a shared cache only for a bounded batch pass that
+  // can tolerate serving a snapshot within its TTL.
   cache?: SnapshotCache;
   // Optional pure context for the derivation — e.g. which `blocked on #N`
   // issues are currently open. Defaults to `{}`.
@@ -74,7 +76,6 @@ function parseTarget(repo: string, prNumber: number): PrSnapshotTarget {
 export function createDerivePrStateExecutor(
   deps: DerivePrStateDependencies,
 ): StepExecutor {
-  const cache = deps.cache ?? createSnapshotCache();
   const deriveContext = deps.deriveContext ?? {};
 
   return async (step: StepInstance): Promise<ExecutorResult> => {
@@ -86,6 +87,14 @@ export function createDerivePrStateExecutor(
     }
 
     const target = parseTarget(run.repo, run.prNumber);
+    // Default to a fresh cache per invocation so each tick derives from live
+    // GitHub state. A cache shared across ticks would, within its TTL, serve a
+    // snapshot keyed only by the PR target: approval is a label change that
+    // leaves headOid unchanged, so a just-approved PR would keep deriving as
+    // not-approved — and be skipped as a merge candidate — until the cached
+    // entry expired (#254). Callers that can tolerate TTL-window staleness may
+    // still inject a shared `deps.cache`.
+    const cache = deps.cache ?? createSnapshotCache();
     const snapshot = await fetchPrSnapshot(deps.transport, target, { cache });
     const state = derivePrState(snapshot, deriveContext);
 
