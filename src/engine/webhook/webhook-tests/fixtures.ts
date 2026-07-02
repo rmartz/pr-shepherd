@@ -65,7 +65,9 @@ export function makeWorkflowRun(
     status: RunStatus.Running,
     childRunIds: [],
     context: {},
-    currentStepId: "derive_pr_state",
+    // A step *instance* id (not a definition id) — the value crash recovery
+    // resolves against the step-instance collection (#285).
+    currentStepId: "step-instance-1",
     createdAt: 1000,
     updatedAt: 1000,
     metrics: {

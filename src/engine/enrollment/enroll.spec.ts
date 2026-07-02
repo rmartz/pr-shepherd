@@ -72,6 +72,25 @@ describe("enrollment creates a run + first step with the version pinned", () => 
     expect(steps[0]?.input).toEqual({ skill: "review" });
     expect(steps[0]?.status).toBe(StepStatus.Pending);
   });
+
+  it("points currentStepId at the first step's instance id, not the definition id", async () => {
+    const db = freshDb();
+
+    const result = await enrollPr(db, makeDiscoveredPr(), makeWorkflowGraph(), {
+      newId: sequencedIds(),
+      now: () => 1000,
+    });
+
+    const run = await db.get(Collections.workflowRuns, result.runId);
+    const steps = await db.list(Collections.stepInstances, {
+      runId: result.runId,
+    });
+    // currentStepId must be the step *instance* id so crash recovery can
+    // resolve it against the step-instance collection (#285) — the instance's
+    // id differs from its `stepDefinitionId`.
+    expect(run?.currentStepId).toBe(steps[0]?.id);
+    expect(run?.currentStepId).not.toBe(steps[0]?.stepDefinitionId);
+  });
 });
 
 describe("idempotency guard: a PR with an active run is not re-enrolled", () => {

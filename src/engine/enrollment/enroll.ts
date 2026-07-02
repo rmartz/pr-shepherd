@@ -81,6 +81,12 @@ export async function enrollPr(
   }
 
   const runId = newId();
+  // Pre-generate the first step's *instance* id so the run can point at it.
+  // `currentStepId` must be the step-instance id, not the definition id
+  // (`firstStep.id`): crash recovery resolves `currentStepId` against the
+  // step-instance collection, so a definition id there makes recovery treat a
+  // healthy run as an orphan (#285).
+  const stepInstanceId = newId();
   const createdAt = now();
 
   const run: WorkflowRun = {
@@ -93,7 +99,7 @@ export async function enrollPr(
     status: RunStatus.Pending,
     childRunIds: [],
     context: {},
-    currentStepId: firstStep.id,
+    currentStepId: stepInstanceId,
     createdAt,
     updatedAt: createdAt,
     metrics: {
@@ -106,7 +112,7 @@ export async function enrollPr(
   await db.create(Collections.workflowRuns, run);
 
   const stepInstance: StepInstance = {
-    id: newId(),
+    id: stepInstanceId,
     runId,
     stepDefinitionId: firstStep.id,
     stepType: firstStep.stepType,

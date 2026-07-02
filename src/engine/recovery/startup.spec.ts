@@ -157,6 +157,29 @@ describe("recoverFromCrash", () => {
     expect(step?.status).toBe(StepStatus.Running);
   });
 
+  it("does not orphan a running run whose currentStepId resolves to an existing step", async () => {
+    // The regression guarding #285: enrollment sets currentStepId to the step
+    // *instance* id, so recovery resolves it and leaves the healthy run alone.
+    const db = createInMemoryDb();
+    await seedRun(db, {
+      id: "run-live",
+      status: RunStatus.Running,
+      currentStepId: "step-live",
+    });
+    await seedStep(db, {
+      id: "step-live",
+      runId: "run-live",
+      status: StepStatus.Pending,
+    });
+
+    const report = await recoverFromCrash(db);
+
+    expect(report.failedOrphanRunIds).toEqual([]);
+    expect((await db.get(Collections.workflowRuns, "run-live"))?.status).toBe(
+      RunStatus.Running,
+    );
+  });
+
   it("marks running orphan workflow runs as failed with a crash recovery error", async () => {
     const db = createInMemoryDb();
     await seedRun(db, {
