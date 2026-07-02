@@ -8,7 +8,22 @@ export {
   createMergeCoordinator,
   MergeOutcome,
   type MergeAttempt,
+  type MergeBudget,
   type MergeCoordinator,
 } from "./mergeCoordinator";
 export { assessMergeReadiness, MergeReadiness } from "./readiness";
 export { needsBranchSync, type BranchCurrency } from "./branchCurrency";
+// Durable merge-attempt budget (#252): error classification + the hidden-marker
+// ledger that persists the per-(PR, head SHA) retry count on the PR itself.
+export {
+  classifyMergeError,
+  mergeErrorMessage,
+  type MergeErrorClass,
+} from "./errorClassification";
+export {
+  ESCALATION_THRESHOLD,
+  buildAttemptMarker,
+  countAttempts,
+  parseAttemptMarker,
+  type AttemptMarker,
+} from "./attemptLedger";
