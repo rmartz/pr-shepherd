@@ -50,7 +50,12 @@ export function createGithubReadTransport(
       if (parsed.errors !== undefined) {
         throw new Error(`GraphQL errors: ${JSON.stringify(parsed.errors)}`);
       }
-      return parsed.data as T;
+      if (parsed.data === undefined) {
+        throw new Error(
+          `GraphQL response missing 'data' field: ${result.stdout.slice(0, 200)}`,
+        );
+      }
+      return parsed.data;
     },
 
     restPaginate: async <T = unknown>(
