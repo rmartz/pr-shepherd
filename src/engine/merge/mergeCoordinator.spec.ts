@@ -1,5 +1,9 @@
 import { describe, it, expect, vi } from "vitest";
-import { createMergeCoordinator, MergeOutcome } from "./mergeCoordinator";
+import {
+  createMergeCoordinator,
+  MergeOutcome,
+  type MergeBudget,
+} from "./mergeCoordinator";
 import { MergeReadiness } from "./readiness";
 
 function baseAttempt(overrides: {
@@ -7,6 +11,7 @@ function baseAttempt(overrides: {
   revalidate?: () => Promise<MergeReadiness>;
   merge?: () => Promise<void>;
   markForFix?: (reason: MergeReadiness | "merge_error") => Promise<void>;
+  budget?: MergeBudget;
 }) {
   return {
     repo: "owner/repo",
@@ -16,8 +21,25 @@ function baseAttempt(overrides: {
       overrides.revalidate ?? (() => Promise.resolve(MergeReadiness.Ready)),
     merge: overrides.merge ?? (() => Promise.resolve()),
     markForFix: overrides.markForFix ?? (() => Promise.resolve()),
+    budget: overrides.budget,
   };
 }
+
+// A wired retry-budget seam with a scripted prior-failure count.
+function makeBudget(priorFailures: number): MergeBudget & {
+  count: ReturnType<typeof vi.fn>;
+  record: ReturnType<typeof vi.fn>;
+  escalate: ReturnType<typeof vi.fn>;
+} {
+  return {
+    count: vi.fn(() => Promise.resolve(priorFailures)),
+    record: vi.fn(() => Promise.resolve()),
+    escalate: vi.fn(() => Promise.resolve()),
+  };
+}
+
+const failingMerge = (message: string) => () =>
+  Promise.reject(new Error(message));
 
 describe("merge coordinator merges a ready candidate", () => {
   it("performs the merge and returns Merged", async () => {
@@ -136,5 +158,65 @@ describe("merge coordinator routes by pre-merge readiness", () => {
     expect(outcome).toBe(MergeOutcome.Failed);
     expect(markForFix).toHaveBeenCalledWith("merge_error");
     expect(coordinator.isMerging()).toBe(false);
+  });
+});
+
+describe("merge coordinator applies the durable retry budget on failure", () => {
+  it("escalates an operator-actionable failure immediately without spending budget", async () => {
+    const budget = makeBudget(0);
+    const markForFix = vi.fn(() => Promise.resolve());
+    const coordinator = createMergeCoordinator();
+
+    const outcome = await coordinator.attemptMerge(
+      baseAttempt({
+        merge: failingMerge("Bad credentials"),
+        markForFix,
+        budget,
+      }),
+    );
+
+    expect(outcome).toBe(MergeOutcome.Escalated);
+    expect(budget.escalate).toHaveBeenCalledOnce();
+    // Guaranteed-to-fail causes are never counted or retried.
+    expect(budget.record).not.toHaveBeenCalled();
+    expect(markForFix).not.toHaveBeenCalled();
+  });
+
+  it("records a transient failure and defers when under the threshold", async () => {
+    const budget = makeBudget(0); // this is the first failure → 1 < 3
+    const markForFix = vi.fn(() => Promise.resolve());
+    const coordinator = createMergeCoordinator();
+
+    const outcome = await coordinator.attemptMerge(
+      baseAttempt({
+        merge: failingMerge("Base branch was modified"),
+        markForFix,
+        budget,
+      }),
+    );
+
+    expect(outcome).toBe(MergeOutcome.Failed);
+    expect(budget.record).toHaveBeenCalledOnce();
+    expect(budget.escalate).not.toHaveBeenCalled();
+    expect(markForFix).toHaveBeenCalledWith("merge_error");
+  });
+
+  it("escalates a transient failure once it reaches the threshold", async () => {
+    const budget = makeBudget(2); // this failure makes 3 == ESCALATION_THRESHOLD
+    const markForFix = vi.fn(() => Promise.resolve());
+    const coordinator = createMergeCoordinator();
+
+    const outcome = await coordinator.attemptMerge(
+      baseAttempt({
+        merge: failingMerge("Base branch was modified"),
+        markForFix,
+        budget,
+      }),
+    );
+
+    expect(outcome).toBe(MergeOutcome.Escalated);
+    expect(budget.record).toHaveBeenCalledOnce();
+    expect(budget.escalate).toHaveBeenCalledOnce();
+    expect(markForFix).not.toHaveBeenCalled();
   });
 });

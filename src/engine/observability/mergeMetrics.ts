@@ -23,6 +23,12 @@ export interface MergeEfficiencyMetrics {
   // Whether the merge succeeded on its first attempt (no merge_failed
   // event preceded the merge_completed event).
   mergedFirstTry: boolean;
+  // Total merge attempts it took to land: `merge_failed` events + 1 (the
+  // successful attempt). This is the run-scoped efficiency count; the durable
+  // per-(PR, head SHA) budget that actually gates retries lives on the PR as
+  // marker comments (see the merge coordinator's `attemptLedger`, #252). Aligns
+  // with the shared efficiency-schema `mergeAttempts` definition.
+  mergeAttempts: number;
 }
 
 // Compute merge-efficiency metrics for one merged run. `events` is the
@@ -61,5 +67,6 @@ export function computeMergeMetrics(
     reviewCycles,
     retries,
     mergedFirstTry: mergeFailures === 0,
+    mergeAttempts: mergeFailures + 1,
   };
 }

@@ -1,3 +1,5 @@
+import { ESCALATION_THRESHOLD } from "./attemptLedger";
+import { classifyMergeError, mergeErrorMessage } from "./errorClassification";
 import { MergeReadiness } from "./readiness";
 
 // ---------------------------------------------------------------------------
@@ -16,10 +18,28 @@ import { MergeReadiness } from "./readiness";
 
 export enum MergeOutcome {
   Deferred = "deferred", // not ready yet (CI running / Copilot pending) — re-poll
-  Failed = "failed", // merge attempt errored — marked for re-review/fix
+  Escalated = "escalated", // failure is operator-actionable or hit the retry budget — sticky `escalation needed`
+  Failed = "failed", // merge attempt errored (transient, under budget) — marked for re-review/fix
   Merged = "merged",
   Rejected = "rejected", // pre-validation failed (CI failed / conflict) — routed to fix
   Skipped = "skipped", // a merge is already in flight, or this (pr,headSha) already merged
+}
+
+// The durable retry-budget seam (#252). Optional on a `MergeAttempt`: when the
+// caller wires it, a transient merge failure is counted per (PR, head SHA) and
+// escalated at `ESCALATION_THRESHOLD`; an operator-actionable failure escalates
+// immediately. Production reads/writes hidden marker comments on the PR (see
+// `attemptLedger`); tests inject fakes. When omitted, a merge error routes to
+// fix-review as before (no durable budget).
+export interface MergeBudget {
+  // Prior transient failures recorded against this (PR, head SHA), already
+  // discounted for a new HEAD or a cleared `escalation needed` label.
+  count: () => Promise<number>;
+  // Persist a "will retry" marker for this failed attempt.
+  record: () => Promise<void>;
+  // Apply sticky `escalation needed` (blocking the PR from re-selection via the
+  // gate model) and record a repeated-failure ledger occurrence.
+  escalate: () => Promise<void>;
 }
 
 export interface MergeAttempt {
@@ -36,6 +56,10 @@ export interface MergeAttempt {
   // Kick the PR back to review/fix with the reason (CI failed, conflict, or a
   // failed merge attempt).
   markForFix: (reason: MergeReadiness | "merge_error") => Promise<void>;
+  // Optional durable retry-budget seam (#252). When present, a merge error is
+  // classified and either escalated immediately (operator-actionable) or counted
+  // toward the per-(PR, head SHA) budget.
+  budget?: MergeBudget;
 }
 
 export interface MergeCoordinator {
@@ -46,6 +70,37 @@ export interface MergeCoordinator {
 
 function idempotencyKey(repo: string, pr: number, headSha: string): string {
   return `${repo}#${String(pr)}@${headSha}`;
+}
+
+// Route a failed merge attempt. Without a wired budget, a merge error kicks the
+// PR back to fix-review as before. With one: an operator-actionable failure
+// escalates immediately (it can never succeed on retry, so no budget is spent),
+// while a transient failure is recorded against the per-(PR, head SHA) budget
+// and escalates only once it reaches `ESCALATION_THRESHOLD`.
+async function handleMergeError(
+  attempt: MergeAttempt,
+  error: unknown,
+): Promise<MergeOutcome> {
+  const budget = attempt.budget;
+  if (budget === undefined) {
+    await attempt.markForFix("merge_error");
+    return MergeOutcome.Failed;
+  }
+
+  if (classifyMergeError(mergeErrorMessage(error)) === "operator_actionable") {
+    await budget.escalate();
+    return MergeOutcome.Escalated;
+  }
+
+  const priorFailures = await budget.count();
+  await budget.record();
+  if (priorFailures + 1 >= ESCALATION_THRESHOLD) {
+    await budget.escalate();
+    return MergeOutcome.Escalated;
+  }
+
+  await attempt.markForFix("merge_error");
+  return MergeOutcome.Failed;
 }
 
 // One coordinator per daemon process. Holds the in-flight mutex and the set of
@@ -70,9 +125,8 @@ export function createMergeCoordinator(): MergeCoordinator {
           await attempt.merge();
           merged.add(key);
           return MergeOutcome.Merged;
-        } catch {
-          await attempt.markForFix("merge_error");
-          return MergeOutcome.Failed;
+        } catch (error) {
+          return await handleMergeError(attempt, error);
         }
       }
       if (

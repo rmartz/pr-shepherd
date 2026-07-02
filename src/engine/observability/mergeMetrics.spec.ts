@@ -52,4 +52,15 @@ describe("computeMergeMetrics", () => {
 
     expect(computeMergeMetrics(run, events).mergedFirstTry).toBe(false);
   });
+
+  it("counts mergeAttempts as the merge failures plus the successful attempt", () => {
+    const run = makeWorkflowRun({ createdAt: 0, completedAt: 5000 });
+    const events = [
+      makeEventRecord({ id: "f1", eventType: EventType.MergeFailed }),
+      makeEventRecord({ id: "f2", eventType: EventType.MergeFailed }),
+      makeEventRecord({ id: "m1", eventType: EventType.MergeCompleted }),
+    ];
+
+    expect(computeMergeMetrics(run, events).mergeAttempts).toBe(3);
+  });
 });
