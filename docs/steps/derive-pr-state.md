@@ -22,9 +22,13 @@ The executor is **read-only**. It holds a `GithubReadTransport` whose only opera
 
 Because it performs a GitHub read, `derive_pr_state` counts against both the **per-repo** concurrency dimension and the global **GitHub-API** dimension (`systemGithubApi`), alongside `github_api`. This keeps it inside the shared budget that guards against 429 / secondary-rate-limit storms.
 
+## Freshness
+
+Each invocation derives from a **fresh snapshot cache by default** — every tick reads live GitHub state rather than reusing a cross-tick cached snapshot. A cache shared across ticks would, within its TTL, serve a snapshot keyed only by the PR target; because a review-state change (a submitted APPROVED review) leaves `headOid` unchanged, a just-approved PR would keep deriving as _not-approved_ (and be skipped as a merge candidate) until the cached entry expired. Callers that can tolerate TTL-window staleness — e.g. a bounded batch pass over many PRs — may still inject a shared `SnapshotCache` via `deps.cache`.
+
 ## Public API
 
-Exported from `src/steps/derivePrState.ts`: `createDerivePrStateExecutor(deps)` and the `DerivePrStateDependencies` / `DerivePrStateOutput` types. `deps` injects the `GithubReadTransport`, the `Db` (to read the run), and an optional shared `SnapshotCache` and `DeriveContext` — so tests drive the executor without real HTTP.
+Exported from `src/steps/derivePrState.ts`: `createDerivePrStateExecutor(deps)` and the `DerivePrStateDependencies` / `DerivePrStateOutput` types. `deps` injects the `GithubReadTransport`, the `Db` (to read the run), and an optional shared `SnapshotCache` (defaults to a fresh per-invocation cache; see [Freshness](#freshness)) and `DeriveContext` — so tests drive the executor without real HTTP.
 
 ## Related
 
