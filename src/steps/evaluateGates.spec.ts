@@ -171,6 +171,19 @@ describe("evaluateGatesExecutor emits the escalation relabel on an escalate deci
       ],
     });
   });
+
+  it("throws on an escalate decision when repo/pr are missing rather than emitting no relabel", () => {
+    // A workflow that routes escalate but forgets to supply repo/pr would
+    // otherwise silently produce output with no `escalationActions` (#277). The
+    // guard throws synchronously, like the schema parse above it.
+    const state = makePrStateVector({ ci: CIState.CancelledRetried });
+    expect(() =>
+      evaluateGatesExecutor(
+        makeEvaluateGatesStep({ state, labels: ["approved"] }),
+        makeNoopRuntime(),
+      ),
+    ).toThrow(/missing pr|missing repo/);
+  });
 });
 
 describe("evaluateGatesExecutor honors decide options", () => {
