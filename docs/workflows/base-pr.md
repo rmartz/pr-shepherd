@@ -18,7 +18,7 @@ It implements the goal-state lifecycle in [PR Lifecycle — Goal-State Design](.
 derive_pr_state → evaluate_gates → { review / fix_review / merge /
                                      wait_ci / wait_copilot_review /
                                      wait_author_push / authorize_ci /
-                                     rerun_ci / park }
+                                     rerun_ci / escalate / park }
 ```
 
 Every effectful step (each `github_api` poster and each wait) routes back to `derive_pr_state`, so the next action is always chosen from a freshly-read state vector — a stored phase is never trusted.
@@ -39,6 +39,7 @@ Every effectful step (each `github_api` poster and each wait) routes back to `de
    | `wait_remote`   | `wait_author_push`    | wait_author_push                    |
    | `authorize_ci`  | `authorize_ci`        | github_api                          |
    | `rerun_ci`      | `rerun_ci`            | github_api                          |
+   | `escalate`      | `escalate`            | github_api                          |
    | `park`          | _terminal_            | (ends the tick)                     |
 
    Every `Action` is handled explicitly so no derived action falls into a silent dead-zone; the trailing `condition: "true"` is the routing DSL's required catch-all and parks defensively.
@@ -50,6 +51,10 @@ Only `github_api` steps mutate GitHub. Each Claude skill (`review`, `fix_review`
 ## Parking
 
 A hold (draft, WIP, do-not-merge, blocked-on-issue, escalation) yields `action: park`, which routes to a terminal `next: null`. The run ends for this tick and auto-resumes on the next scheduled cycle when its cause clears — parks are never manually un-parked.
+
+## Escalation
+
+Persistently-cancelled CI (`CancelledRetried`, the one-shot rerun already spent) does not silently re-park. `evaluate_gates` yields `action: escalate` and, alongside it, the concrete `add_label` / `remove_label` batch (`output.escalationActions`) that makes `escalation needed` the PR's sole verdict label. The `escalate` `github_api` step applies it and re-derives. The relabel is applied exactly once — the resulting `escalation needed` hold parks the run at the `NoHold` gate on the next tick — and clearing the label (after a human fixes the run) returns the PR to normal review routing. See the [evaluate_gates escalation output](../steps/evaluate-gates.md#escalation-output) and [#253](https://github.com/rmartz/pr-shepherd/issues/253).
 
 ## Related
 

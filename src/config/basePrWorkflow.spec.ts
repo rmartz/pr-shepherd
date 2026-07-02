@@ -155,6 +155,23 @@ describe("evaluate_gates routes each gate action to its concrete step", () => {
     expect(routeForAction(gates, Action.WaitRemote)).toBe("wait_author_push");
   });
 
+  it("routes a persistently-cancelled PR (action=escalate) to the escalate step", () => {
+    const graph = loadWorkflow(source);
+    const gates = stepById(graph.steps, "evaluate_gates");
+
+    expect(routeForAction(gates, Action.Escalate)).toBe("escalate");
+  });
+
+  it("wires the escalate step to apply the computed escalation relabel", () => {
+    const graph = loadWorkflow(source);
+    const escalate = stepById(graph.steps, "escalate");
+
+    expect(escalate.input["actions"]).toBe("{{ output.escalationActions }}");
+    expect(escalate.routing.map((rule) => rule.next)).toContain(
+      "derive_pr_state",
+    );
+  });
+
   it("handles every gate Action so no derived action falls through", () => {
     const graph = loadWorkflow(source);
     const gates = stepById(graph.steps, "evaluate_gates");

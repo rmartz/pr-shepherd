@@ -20,7 +20,7 @@ import { Action } from "@/engine/gates";
 //   - ci-failing & fixable → spawn_fix_pr (fork) → wait_fix_pr →
 //       rebase_dependabot → wait_ci → re-derive   (action=fix_review, CI-driven)
 //   - conflicting  → rebase_dependabot     (action=fix_review, conflict-driven)
-//   - ci-failing & not-fixable → terminal fail (action=park → terminal)
+//   - ci persistently cancelled → escalate  (action=escalate → escalate step)
 //
 // The conflict-driven and CI-driven fix branches are both `action=fix_review`;
 // they are disambiguated by `output.blockingGate` (`no_conflict` vs `ci_green`)
@@ -176,8 +176,8 @@ describe("dependabot-pr classification branch: conflicting → rebase", () => {
   });
 });
 
-describe("dependabot-pr classification branch: ci-failing & not-fixable → terminal fail", () => {
-  it("routes a held/not-fixable PR (action=park) to a terminal branch", () => {
+describe("dependabot-pr classification branch: held PR → terminal park", () => {
+  it("routes a held PR (action=park) to a terminal branch", () => {
     const graph = loadWorkflow(PR_SOURCE);
     const gates = stepById(graph.steps, "evaluate_gates");
     const rule = gates.routing.find(
@@ -186,6 +186,20 @@ describe("dependabot-pr classification branch: ci-failing & not-fixable → term
 
     expect(rule).toBeDefined();
     expect(rule?.next).toBeUndefined();
+  });
+});
+
+describe("dependabot-pr classification branch: persistently-cancelled CI → escalate", () => {
+  it("routes an escalate decision to the escalate step, which applies the relabel", () => {
+    const graph = loadWorkflow(PR_SOURCE);
+    const gates = stepById(graph.steps, "evaluate_gates");
+    const rule = gates.routing.find(
+      (r) => r.condition === `output.action == '${Action.Escalate}'`,
+    );
+
+    expect(rule?.next).toBe("escalate");
+    const escalate = stepById(graph.steps, "escalate");
+    expect(escalate.input["actions"]).toBe("{{ output.escalationActions }}");
   });
 });
 

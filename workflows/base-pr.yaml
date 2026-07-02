@@ -42,6 +42,11 @@ steps:
     stepType: decision
     input:
       state: "{{ context.state }}"
+      # Supplied so an `escalate` decision can build the exact `escalation
+      # needed` relabel (strip any present verdict) without a re-fetch (#253).
+      labels: "{{ context.labels }}"
+      repo: "{{ context.repo }}"
+      pr: "{{ context.prNumber }}"
     routing:
       - condition: "output.action == 'review'"
         next: review
@@ -59,6 +64,11 @@ steps:
         next: authorize_ci
       - condition: "output.action == 'rerun_ci'"
         next: rerun_ci
+      # Persistently-cancelled CI: apply the sticky `escalation needed` label so
+      # a human is surfaced, then re-derive. The relabel lands once — next tick
+      # parks at NoHold before CI is re-checked.
+      - condition: "output.action == 'escalate'"
+        next: escalate
       # A hold (draft / WIP / do-not-merge / blocked-on-issue / escalation)
       # parks the run: it ends this tick and auto-resumes next cycle when the
       # cause clears. `next: null` is the terminal route.
@@ -158,6 +168,19 @@ steps:
           params:
             repo: "{{ context.repo }}"
             pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+
+  # --- Escalate (github_api) ------------------------------------------------
+  # Persistently-cancelled CI surfaced to a human: apply the `escalation needed`
+  # verdict label and strip any other present verdict, using the atomic relabel
+  # `evaluate_gates` computed in `output.escalationActions` (#253). Re-derive so
+  # the applied hold parks the run on the next tick.
+  - id: escalate
+    stepType: github_api
+    input:
+      actions: "{{ output.escalationActions }}"
     routing:
       - condition: "true"
         next: derive_pr_state
