@@ -247,6 +247,9 @@ describe("createDerivePrStateExecutor derives live state on each invocation", ()
     await executor(step, makeNoopRuntime());
 
     expect(transport.graphql).toHaveBeenCalledTimes(1);
+    // runFetch issues two restPaginate calls per fetch (reviews + comments);
+    // with a shared cache the second invocation is a hit, so total stays at 2.
+    expect(transport.restPaginate).toHaveBeenCalledTimes(2);
   });
 });
 

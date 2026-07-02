@@ -89,11 +89,11 @@ export function createDerivePrStateExecutor(
     const target = parseTarget(run.repo, run.prNumber);
     // Default to a fresh cache per invocation so each tick derives from live
     // GitHub state. A cache shared across ticks would, within its TTL, serve a
-    // snapshot keyed only by the PR target: approval is a label change that
-    // leaves headOid unchanged, so a just-approved PR would keep deriving as
-    // not-approved — and be skipped as a merge candidate — until the cached
-    // entry expired (#254). Callers that can tolerate TTL-window staleness may
-    // still inject a shared `deps.cache`.
+    // snapshot keyed only by the PR target: a review-state change (a submitted
+    // APPROVED review) leaves headOid unchanged, so a just-approved PR would
+    // keep deriving as not-approved — and be skipped as a merge candidate —
+    // until the cached entry expired (#254). Callers that can tolerate
+    // TTL-window staleness may still inject a shared `deps.cache`.
     const cache = deps.cache ?? createSnapshotCache();
     const snapshot = await fetchPrSnapshot(deps.transport, target, { cache });
     const state = derivePrState(snapshot, deriveContext);
