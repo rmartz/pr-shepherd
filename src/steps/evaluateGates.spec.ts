@@ -30,6 +30,7 @@ import {
 import { createRunner } from "@/engine/runner";
 import { makeNoopRuntime } from "@/engine/runner/runner-tests/fixtures";
 import { evaluateGatesExecutor } from "./evaluateGates";
+import { GithubActionType } from "./githubApi";
 
 // ---------------------------------------------------------------------------
 // Tests for the `evaluate_gates` step executor (Epic 10, #100).
@@ -139,6 +140,35 @@ describe("evaluateGatesExecutor emits the action decide() returns", () => {
     expect(result.output).toEqual({
       action: Action.Merge,
       blockingGate: Gate.Merge,
+    });
+  });
+});
+
+describe("evaluateGatesExecutor emits the escalation relabel on an escalate decision", () => {
+  it("adds `escalation needed` and strips the present verdict for persistently-cancelled CI", async () => {
+    const state = makePrStateVector({ ci: CIState.CancelledRetried });
+    const result = await evaluateGatesExecutor(
+      makeEvaluateGatesStep({
+        state,
+        labels: ["approved", "Engine"],
+        repo: "owner/repo-a",
+        pr: 7,
+      }),
+      makeNoopRuntime(),
+    );
+    expect(result.output).toEqual({
+      action: Action.Escalate,
+      blockingGate: Gate.CiGreen,
+      escalationActions: [
+        {
+          type: GithubActionType.AddLabel,
+          params: { repo: "owner/repo-a", pr: 7, label: "escalation needed" },
+        },
+        {
+          type: GithubActionType.RemoveLabel,
+          params: { repo: "owner/repo-a", pr: 7, label: "approved" },
+        },
+      ],
     });
   });
 });

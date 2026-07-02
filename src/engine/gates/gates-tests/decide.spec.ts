@@ -77,10 +77,38 @@ describe("decide() — CI_GREEN gate", () => {
     });
   });
 
-  it("parks (escalates) an already-retried cancel — one-shot, never loops", () => {
+  it("escalates an already-retried cancel — one-shot rerun spent, surface a human", () => {
     expect(decide(makePrStateVector({ ci: CIState.CancelledRetried }))).toEqual(
-      { action: Action.Park, blockingGate: Gate.CiGreen },
+      { action: Action.Escalate, blockingGate: Gate.CiGreen },
     );
+  });
+
+  it("parks (does not re-escalate) once the escalation label is applied", () => {
+    // With the sticky `escalation needed` hold present, NoHold parks before
+    // CiGreen is reached — so the escalate action fires exactly once (#253).
+    expect(
+      decide(
+        makePrStateVector({
+          ci: CIState.CancelledRetried,
+          hold: HoldState.EscalationNeeded,
+        }),
+      ),
+    ).toEqual({ action: Action.Park, blockingGate: Gate.NoHold });
+  });
+
+  it("re-enters review once escalation clears and CI recovers, with the verdict stripped", () => {
+    // The human cleared `escalation needed` and re-ran CI to green; the stripped
+    // approval means the PR gets a fresh review rather than merging on a stale
+    // verdict (#253).
+    expect(
+      decide(
+        makePrStateVector({
+          ci: CIState.Passed,
+          hold: HoldState.None,
+          review: ReviewState.Unreviewed,
+        }),
+      ),
+    ).toEqual({ action: Action.Review, blockingGate: Gate.CodeApproved });
   });
 
   it("waits on running CI", () => {

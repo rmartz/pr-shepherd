@@ -38,6 +38,11 @@ import type { ExecutorResult, StepExecutor } from "@/engine/runner";
 
 export interface DerivePrStateOutput {
   state: PrStateVector;
+  // The PR's raw label list, surfaced alongside the derived vector so a
+  // downstream step can compute an exact label mutation without re-fetching —
+  // e.g. `evaluate_gates` builds the escalation relabel from these (#253). The
+  // derived axes deliberately do not carry raw labels, so this is the seam.
+  labels: string[];
 }
 
 export interface DerivePrStateDependencies {
@@ -89,6 +94,6 @@ export function createDerivePrStateExecutor(
     const snapshot = await fetchPrSnapshot(deps.transport, target, { cache });
     const state = derivePrState(snapshot, deriveContext);
 
-    return { output: { state } };
+    return { output: { state, labels: snapshot.labels } };
   };
 }
