@@ -29,9 +29,12 @@ type GateCheck = (state: PrStateVector, opts: DecideOptions) => GateResult;
 
 // The action demanded by an unsatisfied CI gate. `Passed` is the only satisfied
 // state; every other CI verdict routes to a distinct recovery action. A
-// `CancelledRetried` run has already used its one-shot rerun, so it escalates
-// (PARK) rather than looping. A CI-failing PR that was never reviewed routes to
-// REVIEW (render a first verdict), not FIX_REVIEW.
+// `CancelledRetried` run has already used its one-shot rerun, so it ESCALATES —
+// applies the sticky `escalation needed` label so a human is surfaced instead of
+// the PR silently re-parking every tick (#253). The escalate action fires
+// exactly once: once the label lands, `NoHold` (ordered before `CiGreen`) parks
+// the PR before this gate is reached again. A CI-failing PR that was never
+// reviewed routes to REVIEW (render a first verdict), not FIX_REVIEW.
 function ciGate(state: PrStateVector): GateResult {
   switch (state.ci) {
     case CIState.Passed:
@@ -41,7 +44,7 @@ function ciGate(state: PrStateVector): GateResult {
     case CIState.Cancelled:
       return Action.RerunCi;
     case CIState.CancelledRetried:
-      return Action.Park;
+      return Action.Escalate;
     case CIState.Running:
       return Action.WaitCi;
     case CIState.Failing:

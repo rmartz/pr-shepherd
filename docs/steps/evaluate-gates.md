@@ -23,7 +23,7 @@ Malformed input (missing/invalid state vector) rejects the step, which the runne
 
 ## Output and routing contract
 
-Output is exactly `{ action, blockingGate }`. A downstream routing step maps each `Action` to a concrete next step; the routing DSL requires a `condition: "true"` catch-all as the final rule:
+Output is `{ action, blockingGate }` — plus `escalationActions` on an `escalate` decision (see below). A downstream routing step maps each `Action` to a concrete next step; the routing DSL requires a `condition: "true"` catch-all as the final rule:
 
 | `output.action`    | next step      |
 | ------------------ | -------------- |
@@ -35,8 +35,13 @@ Output is exactly `{ action, blockingGate }`. A downstream routing step maps eac
 | `rerun_ci`         | `rerun_ci`     |
 | `wait_copilot`     | `wait_copilot` |
 | `wait_remote`      | `wait_remote`  |
+| `escalate`         | `escalate`     |
 | `park`             | `park`         |
 | `true` (catch-all) | required       |
+
+## Escalation output
+
+When `decide()` returns `escalate` — CI is persistently cancelled (`CancelledRetried`) after the one-shot rerun was spent — the step also emits `output.escalationActions`: the concrete `add_label` / `remove_label` batch that `reconcileVerdict(EscalationNeeded, labels)` computes to make `escalation needed` the PR's sole verdict label (any present `approved` / `changes requested` / `review requested` is stripped). The paired `escalate` `github_api` step applies it. Building this needs the PR's raw `labels`, `repo`, and `pr`, which the workflow supplies as extra `evaluate_gates` inputs. The relabel lands exactly once: the applied `escalation needed` hold makes the next tick park at the `NoHold` gate before CI is re-checked, and clearing the label (after a human fixes the run) returns the PR to normal review routing. See [#253](https://github.com/rmartz/pr-shepherd/issues/253).
 
 ## Cost model
 

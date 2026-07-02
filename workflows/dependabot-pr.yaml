@@ -13,7 +13,8 @@
 #                                 re-derive             (action=fix_review, CI)
 #   - conflicting              → rebase_dependabot      (action=fix_review,
 #                                 disambiguated by blockingGate=no_conflict)
-#   - ci-failing & not-fixable → terminal fail          (action=park → null)
+#   - ci persistently cancelled → escalate              (action=escalate: apply
+#                                 sticky `escalation needed`, strip verdicts)
 #
 # The conflict-driven and CI-driven fix branches both surface as
 # `action=fix_review`; they are separated by `output.blockingGate`
@@ -46,6 +47,11 @@ steps:
     stepType: decision
     input:
       state: "{{ context.state }}"
+      # Supplied so an `escalate` decision can build the exact `escalation
+      # needed` relabel without a re-fetch (#253).
+      labels: "{{ context.labels }}"
+      repo: "{{ context.repo }}"
+      pr: "{{ context.prNumber }}"
     routing:
       - condition: "output.action == 'review'"
         next: review
@@ -71,7 +77,11 @@ steps:
         next: authorize_ci
       - condition: "output.action == 'rerun_ci'"
         next: rerun_ci
-      # ci-failing & not-fixable (e.g. CancelledRetried CI) parks: terminal.
+      # ci persistently cancelled (CancelledRetried, rerun spent): surface a
+      # human with the sticky `escalation needed` label instead of silently
+      # parking every tick (#253).
+      - condition: "output.action == 'escalate'"
+        next: escalate
       - condition: "output.action == 'park'"
         next: null
       - condition: "true"
@@ -180,6 +190,18 @@ steps:
           params:
             repo: "{{ context.repo }}"
             pr: "{{ context.prNumber }}"
+    routing:
+      - condition: "true"
+        next: derive_pr_state
+
+  # --- Escalate (github_api) ------------------------------------------------
+  # Persistently-cancelled CI surfaced to a human: apply `escalation needed` and
+  # strip any other present verdict via the relabel `evaluate_gates` computed in
+  # `output.escalationActions` (#253). Re-derive so the hold parks the next tick.
+  - id: escalate
+    stepType: github_api
+    input:
+      actions: "{{ output.escalationActions }}"
     routing:
       - condition: "true"
         next: derive_pr_state

@@ -10,7 +10,9 @@ import {
   ThreadState,
   UATState,
 } from "@/engine/derivation/state-vector";
-import { decide } from "@/engine/gates";
+import { Action, decide } from "@/engine/gates";
+import { VerdictLabel, reconcileVerdict } from "@/engine/guards";
+import { GithubActionType, type GithubAction } from "@/steps/githubApi";
 import type { StepInstance } from "@/db/schemas";
 import type { ExecutorResult, StepExecutor } from "@/engine/runner";
 
@@ -31,12 +33,20 @@ import type { ExecutorResult, StepExecutor } from "@/engine/runner";
 //   output.action == 'rerun_ci'     → rerun_ci
 //   output.action == 'wait_copilot' → wait_copilot
 //   output.action == 'wait_remote'  → wait_remote
+//   output.action == 'escalate'     → escalate
 //   output.action == 'park'         → park
 //   condition: "true"               → <catch-all, required by the DSL>
 //
 // This is the seam that keeps the *routing* configurable in YAML while the
 // *decision* stays in typed, exhaustively-tested TS. The executor itself owns
 // no gate logic — it parses input, delegates to `decide`, and shapes output.
+//
+// Escalation (#253): when `decide()` returns `escalate` (CI is persistently
+// cancelled), the executor also emits `output.escalationActions` — the concrete
+// `add_label` / `remove_label` batch that `reconcileVerdict` computes to make
+// `escalation needed` the PR's sole verdict label. The paired `escalate`
+// `github_api` step applies it. This fires exactly once: the applied label makes
+// the next tick park at `NoHold` before `CiGreen` is re-reached.
 //
 // Cost model: this runs in-process and consumes no Claude / GitHub-API / repo
 // slot. It is dispatched as a `decision`-type step, which `canAdmitStep` (#45)
@@ -69,6 +79,13 @@ const DecideOptionsSchema = z.object({
 export const EvaluateGatesInputSchema = z.object({
   state: PrStateVectorSchema,
   options: DecideOptionsSchema.optional(),
+  // The PR's raw labels, its repo (`owner/name`), and number. Supplied so an
+  // `escalate` decision can build the exact `escalation needed` relabel without
+  // a re-fetch (#253). Optional/defaulted: a workflow that never routes
+  // escalation may omit them, and non-escalate decisions never read them.
+  labels: z.array(z.string()).default([]),
+  repo: z.string().optional(),
+  pr: z.number().int().nonnegative().optional(),
 });
 export type EvaluateGatesInput = z.infer<typeof EvaluateGatesInputSchema>;
 
@@ -80,7 +97,31 @@ export type EvaluateGatesInput = z.infer<typeof EvaluateGatesInputSchema>;
 export const evaluateGatesExecutor: StepExecutor = (
   step: StepInstance,
 ): Promise<ExecutorResult> => {
-  const { state, options } = EvaluateGatesInputSchema.parse(step.input);
+  const { state, options, labels, repo, pr } = EvaluateGatesInputSchema.parse(
+    step.input,
+  );
   const { action, blockingGate } = decide(state, options ?? {});
+
+  if (action === Action.Escalate && repo !== undefined && pr !== undefined) {
+    const mutation = reconcileVerdict(VerdictLabel.EscalationNeeded, labels);
+    const escalationActions: GithubAction[] = [
+      ...mutation.add.map(
+        (label): GithubAction => ({
+          type: GithubActionType.AddLabel,
+          params: { repo, pr, label },
+        }),
+      ),
+      ...mutation.remove.map(
+        (label): GithubAction => ({
+          type: GithubActionType.RemoveLabel,
+          params: { repo, pr, label },
+        }),
+      ),
+    ];
+    return Promise.resolve({
+      output: { action, blockingGate, escalationActions },
+    });
+  }
+
   return Promise.resolve({ output: { action, blockingGate } });
 };
