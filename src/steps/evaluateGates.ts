@@ -81,8 +81,11 @@ export const EvaluateGatesInputSchema = z.object({
   options: DecideOptionsSchema.optional(),
   // The PR's raw labels, its repo (`owner/name`), and number. Supplied so an
   // `escalate` decision can build the exact `escalation needed` relabel without
-  // a re-fetch (#253). Optional/defaulted: a workflow that never routes
-  // escalation may omit them, and non-escalate decisions never read them.
+  // a re-fetch (#253). Optional/defaulted at the schema level: a workflow that
+  // never routes escalation may omit `repo`/`pr`, and non-escalate decisions
+  // never read them. They are, however, REQUIRED at runtime the moment the
+  // decision is `escalate` — the executor throws if either is missing then
+  // (#277), turning a would-be silent no-op into a visible failure.
   labels: z.array(z.string()).default([]),
   repo: z.string().optional(),
   pr: z.number().int().nonnegative().optional(),
@@ -102,7 +105,17 @@ export const evaluateGatesExecutor: StepExecutor = (
   );
   const { action, blockingGate } = decide(state, options ?? {});
 
-  if (action === Action.Escalate && repo !== undefined && pr !== undefined) {
+  if (action === Action.Escalate) {
+    // `repo`/`pr` are schema-optional (a workflow that never routes escalation
+    // omits them), but building the escalation relabel requires both. Fail
+    // loudly here rather than silently emitting no `escalationActions` — that
+    // would leave the downstream `escalate` step with an `undefined` action
+    // batch and no visible cause (#277).
+    if (repo === undefined || pr === undefined) {
+      throw new Error(
+        `evaluate_gates decided '${Action.Escalate}' but its input is missing ${repo === undefined ? "repo" : "pr"}; a workflow routing the escalate action must supply both repo and pr so the escalation relabel can be built`,
+      );
+    }
     const mutation = reconcileVerdict(VerdictLabel.EscalationNeeded, labels);
     const escalationActions: GithubAction[] = [
       ...mutation.add.map(
