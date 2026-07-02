@@ -8,7 +8,7 @@ tags: [steps, derivation, github, read-only, gates]
 
 # `derive_pr_state` step executor
 
-Fetches one rate-limited [PR snapshot](../subsystems/pr-state-derivation.md) for the run's PR, derives the flat 8-axis `PrStateVector`, and returns it as `{ state }`. The runner shallow-merges step output into `workflowRun.context`, so the vector becomes readable at `context.state` — exactly what the routing DSL and the gate step branch on (`context.state.ci == "passed"`, `context.state.review == "approved"`, …). This is the step that replaces the vision's `pr-delegate.py` triage placeholder.
+Fetches one rate-limited [PR snapshot](../subsystems/pr-state-derivation.md) for the run's PR, derives the flat 8-axis `PrStateVector`, and returns it as `{ state, labels }`. The runner shallow-merges step output into `workflowRun.context`, so the vector becomes readable at `context.state` — exactly what the routing DSL and the gate step branch on (`context.state.ci == "passed"`, `context.state.review == "approved"`, …). The raw `labels` list is surfaced alongside at `context.labels` so a downstream step can compute an exact label mutation without a re-fetch — `evaluate_gates` uses it to build the escalation relabel ([#253](https://github.com/rmartz/pr-shepherd/issues/253)); the derived axes deliberately do not carry raw labels. This is the step that replaces the vision's `pr-delegate.py` triage placeholder.
 
 ## Inputs
 

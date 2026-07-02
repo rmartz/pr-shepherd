@@ -120,6 +120,28 @@ function makeApprovalFlippingTransport(): GithubReadTransport & {
   return { graphql, restPaginate } as never;
 }
 
+// A transport whose PR snapshot carries the given labels, so the executor's
+// label passthrough (#253) can be asserted against a controlled, non-empty set.
+function makeLabeledTransport(labelNames: string[]): GithubReadTransport & {
+  graphql: ReturnType<typeof vi.fn>;
+  restPaginate: ReturnType<typeof vi.fn>;
+} {
+  const graphql = vi.fn((): Promise<unknown> => {
+    const response = graphqlResponse() as {
+      repository: { pullRequest: { labels: unknown } };
+    };
+    response.repository.pullRequest.labels = {
+      nodes: labelNames.map((name) => ({ name })),
+    };
+    return Promise.resolve(response);
+  });
+  const restPaginate = vi.fn(
+    (path: string): Promise<unknown[]> =>
+      Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : []),
+  );
+  return { graphql, restPaginate } as never;
+}
+
 function makeWorkflowRun(overrides: Partial<WorkflowRun> = {}): WorkflowRun {
   return {
     id: "run-1",
@@ -250,6 +272,22 @@ describe("createDerivePrStateExecutor derives live state on each invocation", ()
     // runFetch issues two restPaginate calls per fetch (reviews + comments);
     // with a shared cache the second invocation is a hit, so total stays at 2.
     expect(transport.restPaginate).toHaveBeenCalledTimes(2);
+  });
+});
+
+describe("createDerivePrStateExecutor surfaces the PR's raw labels", () => {
+  it("returns the label list alongside the derived vector", async () => {
+    const db = createInMemoryDb();
+    await seedRun(db);
+    const step = await seedStep(db);
+    const transport = makeLabeledTransport(["approved", "Engine"]);
+
+    const result = await createDerivePrStateExecutor({ db, transport })(
+      step,
+      makeNoopRuntime(),
+    );
+
+    expect(result.output["labels"]).toEqual(["approved", "Engine"]);
   });
 });
 

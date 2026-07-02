@@ -13,6 +13,7 @@
 // next workflow step.
 export enum Action {
   AuthorizeCi = "authorize_ci",
+  Escalate = "escalate",
   FixReview = "fix_review",
   Merge = "merge",
   Park = "park",

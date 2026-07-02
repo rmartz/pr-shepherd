@@ -16,12 +16,13 @@ It implements the Dependabot lifecycle in [PR Lifecycle — Goal-State Design §
 
 Every branch is decided by the pure `evaluate_gates` step — no Dependabot-specific logic leaks into the decision; only the routing differs from `base-pr`.
 
-| Condition (PR is…)       | gate `Action` (+ `blockingGate`) | route                                                                        |
-| ------------------------ | -------------------------------- | ---------------------------------------------------------------------------- |
-| mergeable                | `merge` / `review`               | `merge` / `review` → re-derive (the base-pr fast-path)                       |
-| ci-failing & fixable     | `fix_review` (`ci_green`)        | `spawn_fix_pr` → `wait_fix_pr` → `rebase_dependabot` → `wait_ci` → re-derive |
-| conflicting              | `fix_review` (`no_conflict`)     | `rebase_dependabot` → `wait_ci` → re-derive                                  |
-| ci-failing & not-fixable | `park`                           | _terminal_ (ends the tick)                                                   |
+| Condition (PR is…)              | gate `Action` (+ `blockingGate`) | route                                                                            |
+| ------------------------------- | -------------------------------- | -------------------------------------------------------------------------------- |
+| mergeable                       | `merge` / `review`               | `merge` / `review` → re-derive (the base-pr fast-path)                           |
+| ci-failing & fixable            | `fix_review` (`ci_green`)        | `spawn_fix_pr` → `wait_fix_pr` → `rebase_dependabot` → `wait_ci` → re-derive     |
+| conflicting                     | `fix_review` (`no_conflict`)     | `rebase_dependabot` → `wait_ci` → re-derive                                      |
+| ci persistently cancelled       | `escalate`                       | `escalate` (apply sticky `escalation needed`, strip verdicts) → re-derive → park |
+| held (draft / do-not-merge / …) | `park`                           | _terminal_ (ends the tick)                                                       |
 
 The conflict-driven and CI-driven fix branches both surface as `action == 'fix_review'`; they are disambiguated by `output.blockingGate` (`no_conflict` vs `ci_green`), with the most-specific rules ordered first. A conflicting Dependabot branch is fixed by `@dependabot rebase`, **not** a Claude fix — Dependabot owns the branch — so the conflict path rebases while the CI-failure path forks a fix child.
 
