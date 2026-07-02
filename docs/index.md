@@ -49,6 +49,10 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 - [Webhook Receiver](subsystems/webhook-receiver.md) — GitHub webhook ingress: validates `X-Hub-Signature-256`, then persists each raw delivery to Firestore keyed by `X-GitHub-Delivery` before any processing, with Vercel-forward and local-tunnel topologies.
 - [Workflow Hot-Reload](subsystems/workflow-hot-reload.md) — an in-memory registry of loaded workflow graphs that a file watcher refreshes on a `workflows/*.yaml` change, retaining the last-good definition when a hot edit fails validation.
 
+### Adapters
+
+- [GitHub Transports (gh CLI)](adapters/github-transports.md) — production `gh`-CLI-backed implementations of the GitHub read/write transport seams the executors depend on, with rate-limit translation.
+
 ### Step executors
 
 - [claude_skill](steps/claude-skill.md) — runs a Claude skill in a capability-isolated subprocess.
