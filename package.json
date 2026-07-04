@@ -30,13 +30,13 @@
     ]
   },
   "dependencies": {
-    "@sentry/nextjs": "^10.60.0",
+    "@sentry/nextjs": "^10.62.0",
     "@vercel/analytics": "^2.0.1",
     "class-variance-authority": "^0.7.1",
     "clsx": "^2.1.1",
     "commander": "^15.0.0",
     "firebase": "^12.15.0",
-    "firebase-admin": "^14.0.0",
+    "firebase-admin": "^14.1.0",
     "lucide-react": "^1.21.0",
     "next": "16.2.9",
     "react": "19.2.7",
