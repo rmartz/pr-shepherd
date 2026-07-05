@@ -70,8 +70,13 @@ const PostInlineCommentSchema = z.object({
   type: z.literal(GithubActionType.PostInlineComment),
   params: RepoPrParams.extend({
     file: z.string(),
-    line: z.number().int().nonnegative(),
+    line: z.number().int().positive(),
     body: z.string(),
+    // The HEAD commit SHA the inline comment anchors to. The REST API
+    // (`POST .../pulls/{n}/comments`) requires `commit_id`, and the review
+    // skill that emits this action already knows the PR's HEAD — so it supplies
+    // it here rather than making the write transport re-fetch it (#290).
+    commitId: z.string().min(1),
   }),
 });
 
