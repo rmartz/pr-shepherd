@@ -54,6 +54,16 @@ describe("createGithubReadTransport.graphql", () => {
 
     await expect(transport.graphql("q", {})).rejects.toThrow(/GraphQL errors/);
   });
+
+  it("throws when the response has neither data nor errors", async () => {
+    const transport = createGithubReadTransport(
+      execReturning({ stdout: JSON.stringify({ meta: "unexpected" }) }),
+    );
+
+    await expect(transport.graphql("q", {})).rejects.toThrow(
+      /GraphQL response missing 'data' field/,
+    );
+  });
 });
 
 describe("createGithubReadTransport.restPaginate", () => {
