@@ -33,10 +33,11 @@ The step executors read and write GitHub through injected transport seams so the
 
 **String fields use `-f` (raw-field), never `-F`:** `-F` interprets a leading `@` as "read from file", which would corrupt a body like `@dependabot rebase` or an `@`-prefixed label/comment. Only the numeric `line` uses `-F`.
 
-Two actions are not single calls:
+One action is not a single call:
 
-- **`resolve_thread`** is a GraphQL `resolveReviewThread` mutation (sent via `gh api graphql --input -`).
 - **`authorize_ci`** is multi-step: read the PR HEAD sha, list the workflow runs in `action_required` for it, and approve each. Any failed step short-circuits to that step's result. (Re-examined for #290: no schema change makes it a single call — the run discovery is intrinsic — so it lives in the transport.)
+
+`resolve_thread` sends a single GraphQL `resolveReviewThread` mutation via `gh api graphql --input -`; like all other single-call actions it is handled by `buildActionCommand`.
 
 **Contract note:** `post_inline_comment` now carries a `commit_id` (the PR HEAD sha), added to the action schema so the transport does not have to re-fetch it — the emitting review skill already knows the HEAD.
 

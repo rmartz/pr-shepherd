@@ -135,7 +135,9 @@ function parseData(stdout: string): Record<string, unknown> {
   if (trimmed === "") return {};
   try {
     const parsed: unknown = JSON.parse(trimmed);
-    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
+    return typeof parsed === "object" &&
+      parsed !== null &&
+      !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : { value: parsed };
   } catch {
