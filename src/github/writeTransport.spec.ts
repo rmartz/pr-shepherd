@@ -44,6 +44,36 @@ describe("createGithubWriteTransport maps gh results to transport results", () =
     expect(result).toEqual({ kind: "rate_limited" });
   });
 
+  it("wraps a JSON array response under { value } to preserve record shape", async () => {
+    const transport = createGithubWriteTransport(
+      execScript(() => ({ stdout: JSON.stringify([1, 2, 3]) })),
+    );
+
+    const result = await transport.call({
+      type: GithubActionType.RequestSquashMerge,
+      params: { repo: "o/r", pr: 7 },
+    });
+
+    expect(result).toEqual({ kind: "ok", data: { value: [1, 2, 3] } });
+  });
+
+  it("returns a non-retriable error when exec rejects (e.g. spawn failure)", async () => {
+    const transport = createGithubWriteTransport(() =>
+      Promise.reject(new Error("spawn ENOENT")),
+    );
+
+    const result = await transport.call({
+      type: GithubActionType.UpdateBranch,
+      params: { repo: "o/r", pr: 7 },
+    });
+
+    expect(result).toMatchObject({
+      kind: "error",
+      message: "spawn ENOENT",
+      retriable: false,
+    });
+  });
+
   it("marks a 4xx failure non-retriable and a 5xx failure retriable", async () => {
     const notFound = createGithubWriteTransport(
       execScript(() => ({ exitCode: 1, stderr: "gh: Not Found (HTTP 404)" })),
@@ -99,6 +129,26 @@ describe("createGithubWriteTransport authorize_ci", () => {
       "repos/o/r/actions/runs/111/approve",
       "repos/o/r/actions/runs/222/approve",
     ]);
+  });
+
+  it("returns a non-retriable error when exec rejects mid-flow", async () => {
+    const transport = createGithubWriteTransport((command) => {
+      if (command.args.includes(".head.sha")) {
+        return Promise.resolve({ stdout: "abc123\n", stderr: "", exitCode: 0 });
+      }
+      return Promise.reject(new Error("spawn ENOENT"));
+    });
+
+    const result = await transport.call({
+      type: GithubActionType.AuthorizeCi,
+      params: { repo: "o/r", pr: 7 },
+    });
+
+    expect(result).toMatchObject({
+      kind: "error",
+      message: "spawn ENOENT",
+      retriable: false,
+    });
   });
 
   it("short-circuits to rate_limited when a step is rate-limited", async () => {

@@ -27,10 +27,18 @@ export function createGithubWriteTransport(
 ): GithubTransport {
   return {
     call: async (action): Promise<GithubTransportResult> => {
-      if (action.type === GithubActionType.AuthorizeCi) {
-        return authorizeCi(action.params, exec);
+      try {
+        if (action.type === GithubActionType.AuthorizeCi) {
+          return await authorizeCi(action.params, exec);
+        }
+        return mapResult(await exec(buildActionCommand(action)));
+      } catch (err) {
+        return {
+          kind: "error",
+          message: err instanceof Error ? err.message : String(err),
+          retriable: false,
+        };
       }
-      return mapResult(await exec(buildActionCommand(action)));
     },
   };
 }
@@ -127,7 +135,7 @@ function parseData(stdout: string): Record<string, unknown> {
   if (trimmed === "") return {};
   try {
     const parsed: unknown = JSON.parse(trimmed);
-    return typeof parsed === "object" && parsed !== null
+    return typeof parsed === "object" && parsed !== null && !Array.isArray(parsed)
       ? (parsed as Record<string, unknown>)
       : { value: parsed };
   } catch {
