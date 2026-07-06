@@ -46,13 +46,13 @@ export default tseslint.config(
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
-      // File-length hard cap (source tier: 400). Counts every physical line so
-      // it matches the recommended-limit intent; test files + fixtures get the
-      // 600 tier in a later override (last-match-wins). Replaces the bespoke
-      // file-length CI job + check-file-length.mjs.
+      // File-length hard cap (source tier: 400). max:399 so ESLint fires at
+      // >399 = ≥400 (ESLint rejects files with MORE than max lines). Test
+      // files + fixtures get the 600 tier in a later override (last-match-wins).
+      // Replaces the bespoke file-length CI job + check-file-length.mjs.
       "max-lines": [
         "error",
-        { max: 400, skipBlankLines: false, skipComments: false },
+        { max: 399, skipBlankLines: false, skipComments: false },
       ],
     },
   },
@@ -88,13 +88,14 @@ export default tseslint.config(
     },
   },
   // Test files + fixtures get the 600-line tier (last-match-wins overrides the
-  // 400 source cap above). Matches the recommended-limit intent for tests.
+  // 400 source cap above). max:599 so ESLint fires at ≥600, matching the
+  // documented cap intent.
   {
     files: ["src/**/*.spec.{ts,tsx}", "src/**/*-tests/**/*.{ts,tsx}"],
     rules: {
       "max-lines": [
         "error",
-        { max: 600, skipBlankLines: false, skipComments: false },
+        { max: 599, skipBlankLines: false, skipComments: false },
       ],
     },
   },

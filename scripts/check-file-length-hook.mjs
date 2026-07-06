@@ -20,10 +20,10 @@ import { existsSync, readFileSync } from "node:fs";
 const SOURCE_LIMIT = 400;
 const TEST_LIMIT = 600;
 
-// A file is a "test" if it carries a spec/test extension or lives under a
-// `*-tests/` directory — matching eslint.config.js's test-tier globs.
+// A file is a "test" if it carries a .spec extension or lives under a
+// `*-tests/` directory — matching eslint.config.js's test-tier globs exactly.
 function isTestFile(path) {
-  if (/\.(spec|test)\.tsx?$/.test(path)) return true;
+  if (/\.spec\.tsx?$/.test(path)) return true;
   return path
     .split("/")
     .slice(0, -1)
