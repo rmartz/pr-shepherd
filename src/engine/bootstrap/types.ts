@@ -3,6 +3,7 @@ import type { Db } from "@/db/types";
 import type { PrReadTransport } from "@/engine/discovery";
 import type { WorkflowResolver } from "@/engine/enrollment";
 import type { CommandListenerHandle } from "@/engine/commands";
+import type { ExecutionDeps } from "@/engine/execution/executionTick";
 import type { CrashRecoveryReport } from "@/engine/recovery/startup";
 import type { SchedulerHandle } from "@/engine/scheduler";
 import type { SelfDiscoveryReport } from "@/engine/self-discovery";
@@ -41,7 +42,11 @@ export interface BootstrapDeps {
   recoverFromCrash: (db: Db) => Promise<CrashRecoveryReport>;
   // Starts the scheduler tick loop. Defaults to `startScheduler`. Returns a
   // handle whose `stop()` the daemon handle composes for the #208 drain seam.
-  startScheduler: (db: Db, config: Config) => SchedulerHandle;
+  startScheduler: (
+    db: Db,
+    config: Config,
+    execution?: ExecutionDeps,
+  ) => SchedulerHandle;
   // Starts the operator → daemon commands listener. Defaults to
   // `startCommandListener`, bound to `config.commands.collectionPath`.
   startCommandListener: (db: Db, config: Config) => CommandListenerHandle;

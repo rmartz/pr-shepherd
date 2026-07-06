@@ -1,6 +1,10 @@
 import { Collections } from "@/db/collections";
 import { StepStatus } from "@/db/schemas";
 import type { Db, Unsubscribe } from "@/db/types";
+import {
+  runExecutionTick,
+  type ExecutionDeps,
+} from "@/engine/execution/executionTick";
 import { monitorHeartbeats, type HeartbeatFailure } from "./heartbeat";
 import { runSchedulerTick, type SchedulerConfig } from "./loop";
 import type { SchedulerTickReport } from "./loop";
@@ -83,6 +87,13 @@ export interface StartSchedulerOptions {
   triggers?: TriggerSubscription[];
   onTick?: (report: SchedulerTickReport | undefined) => void;
   onTickError?: (err: unknown) => void;
+  // When present, each tick runs the execution pass after admission: it drains
+  // the `queued` steps through the runner and advances the completed ones
+  // (#290). Omitted, the scheduler only admits — the pre-execution-loop
+  // behavior. Execution runs inside the serialized tick, so no two ticks (and
+  // therefore no double-dispatch) ever overlap; a long step blocks admission
+  // for its duration, which is acceptable for the single-flight v1 loop.
+  execution?: ExecutionDeps;
   // Fires after each reconcile-poll heartbeat sweep with the steps it reaped.
   onHeartbeat?: (failures: HeartbeatFailure[]) => void;
   // Receives any error thrown by the heartbeat sweep so a Db hiccup there does
@@ -122,6 +133,12 @@ export function startScheduler(
   const runTick = async (): Promise<void> => {
     try {
       options.onTick?.(await runSchedulerTick(db, config));
+      // Execution rides the same serialized tick: admit, then drain what was
+      // admitted (plus anything already queued). Awaited here so the tick — and
+      // thus `inFlight`, which shutdown drains — reflects in-flight step work.
+      if (options.execution !== undefined) {
+        await runExecutionTick(options.execution);
+      }
     } catch (err) {
       options.onTickError?.(err);
     }
