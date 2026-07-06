@@ -1,8 +1,11 @@
 # Root-only guard (#185): these checks run only for manual commits in the
 # primary checkout. A linked worktree's `.git` is a FILE (a gitdir pointer); the
 # primary checkout's `.git` is a DIRECTORY. Skip in any linked worktree —
-# node_modules (needed by lint-staged) may be absent there, and agent worktrees
-# get the zero-dep file-length guard via claude/hooks/pre-commit instead.
+# node_modules (needed by lint-staged) may be absent there; agent worktrees
+# exit early and receive no pre-commit checks (claude/hooks/pre-commit only
+# dispatches here for the primary checkout). The file-length cap that used to
+# run there is now the ESLint max-lines rule, enforced at push time by
+# pre-push-verify and in CI.
 if [ -f .git ]; then
   exit 0
 fi
@@ -12,9 +15,9 @@ node scripts/check-conflict-markers.mjs --staged
 pnpm exec lint-staged
 # Local deployment-config validation (a repo-local script) still runs at commit.
 node scripts/validate-config.mjs
-# The file-length hard cap now lives in claude/hooks/pre-commit so it runs in
-# every worktree (agent worktrees included); claude/hooks/pre-commit dispatches
-# here for the primary checkout. CI's file-length.yml remains the backstop.
+# The file-length hard cap is now the ESLint `max-lines` rule: enforced here for
+# the primary checkout via lint-staged (eslint on staged files), and in CI +
+# pre-push-verify via `pnpm lint`. There is no separate length check.
 #
 # Secret scanning has moved out of this repo: vercel-deploy-scripts (which
 # provided the `secrets-check` bin) was removed as an npm dependency and is being

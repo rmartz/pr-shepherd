@@ -1,7 +1,8 @@
 #!/usr/bin/env bash
-# Committed pre-commit guard that runs in EVERY worktree — including the agent
-# worktrees under .git-worktrees/ where husky's .husky/pre-commit is skipped
-# (see .husky/pre-commit's root-only guard and #185).
+# Committed pre-commit hook that git runs in EVERY worktree (via core.hooksPath),
+# whose one remaining job is to dispatch to husky's .husky/pre-commit in the
+# primary checkout. Without it, pointing core.hooksPath at claude/hooks would
+# redirect the primary checkout away from husky entirely (see #185).
 #
 # Activated by pointing the repo at this directory:
 #
@@ -13,11 +14,11 @@
 # single set applies to the primary checkout and every linked worktree; the
 # relative path resolves against each worktree's own root.
 #
-# Because this hook is zero-dependency (only node + the tracked
-# scripts/check-file-length.mjs, no node_modules), it runs even in a fresh agent
-# worktree that has not run `pnpm install`. The shared checker is the single
-# source of truth for the file-length cap — this hook calls it rather than
-# duplicating the logic.
+# The file-length hard cap is now the ESLint `max-lines` rule, enforced by
+# `pnpm lint` (pre-push-verify and CI) and, for the primary checkout, by
+# lint-staged. There is no separate length check here, so this hook stays
+# zero-dependency (node only, no node_modules) and just hands
+# off to husky in the primary checkout.
 #
 # Husky coexistence (#185): core.hooksPath is repo-wide, so pointing it here
 # redirects EVERY worktree — including the primary checkout — away from husky's
@@ -30,10 +31,6 @@
 #
 # Bypass: `git commit --no-verify` skips the hook (git-native).
 set -e
-
-# File-length hard cap on staged TS files — the same check CI enforces, caught
-# at commit time in every worktree. This is the guard agent commits need.
-node scripts/check-file-length.mjs --staged
 
 # Primary-worktree only: hand off to husky if this repo also uses it. `.git` is
 # a directory in the primary checkout and a file in a linked worktree.
