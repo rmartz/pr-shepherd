@@ -1,8 +1,11 @@
 # Root-only guard (#185): these checks run only for manual commits in the
 # primary checkout. A linked worktree's `.git` is a FILE (a gitdir pointer); the
 # primary checkout's `.git` is a DIRECTORY. Skip in any linked worktree —
-# node_modules (needed by lint-staged) may be absent there, and agent worktrees
-# get the zero-dep conflict-marker guard via claude/hooks/pre-commit instead.
+# node_modules (needed by lint-staged) may be absent there; agent worktrees
+# exit early and receive no pre-commit checks (claude/hooks/pre-commit only
+# dispatches here for the primary checkout). The file-length cap that used to
+# run there is now the ESLint max-lines rule, enforced at push time by
+# pre-push-verify and in CI.
 if [ -f .git ]; then
   exit 0
 fi
