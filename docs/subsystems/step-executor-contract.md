@@ -21,7 +21,7 @@ type StepExecutor = (
 
 - **`step`** — the running `StepInstance` snapshot the runner has already transitioned to `running` (with `startedAt` and an initial `heartbeatAt`).
 - **`runtime`** — a per-dispatch handle for persisting _intermediate_ lifecycle state (see below). Executors that finish promptly (`decision`, `github_api`, `fork`, `derive_pr_state`, `evaluate_gates`) ignore it.
-- **`ExecutorResult`** — `{ output }`, merged shallow into the parent run's `context` on success. Throwing rejects the step to `failed` with the error recorded and `retryCount` bumped.
+- **`ExecutorResult`** — `{ output }`, merged shallow into the parent run's `context` on success. Throwing rejects the step to `failed` with the error recorded and `retryCount` bumped. Returning `{ suspended: true }` instead parks the step in `waiting` without completing it — the [fan-out](step-fan-out-fan-in.md) escape hatch, where the executor has spawned child steps and the scheduler's join finishes the step later.
 
 ## Why a runtime handle
 

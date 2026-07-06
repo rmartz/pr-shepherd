@@ -23,6 +23,14 @@ export interface ExecutorResult {
   // Step output to merge into the parent `workflowRun.context` on success.
   // Use `{}` when the step has no observable output (e.g. the noop placeholder).
   output: Record<string, unknown>;
+  // Fan-out suspension (#280). When true, the executor has spawned child steps
+  // (see `spawnChildSteps`) and is handing control back to the scheduler rather
+  // than finishing: the runner parks the step in `waiting` — not `completed` —
+  // and does not merge `output` or advance. The scheduler's fan-in join resumes
+  // it once every child step reaches a terminal state, aggregating their
+  // outputs onto the parent then. Default (absent/false): the normal terminal
+  // path. `output` is ignored when `suspended` is true.
+  suspended?: boolean;
 }
 
 // Per-dispatch handle the runner gives each executor so it can persist
