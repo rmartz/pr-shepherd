@@ -92,12 +92,11 @@ export function makeTransport(): GithubReadTransport & {
   graphql: ReturnType<typeof vi.fn>;
   restPaginate: ReturnType<typeof vi.fn>;
 } {
-  const graphql = vi.fn(
-    (): Promise<unknown> => Promise.resolve(graphqlResponse()),
+  const graphql = vi.fn((): Promise<unknown> =>
+    Promise.resolve(graphqlResponse()),
   );
-  const restPaginate = vi.fn(
-    (path: string): Promise<unknown[]> =>
-      Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : REST_COMMENTS),
+  const restPaginate = vi.fn((path: string): Promise<unknown[]> =>
+    Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : REST_COMMENTS),
   );
   return { graphql, restPaginate } as unknown as GithubReadTransport & {
     graphql: ReturnType<typeof vi.fn>;

@@ -88,12 +88,11 @@ function makeTransport(): GithubReadTransport & {
   graphql: ReturnType<typeof vi.fn>;
   restPaginate: ReturnType<typeof vi.fn>;
 } {
-  const graphql = vi.fn(
-    (): Promise<unknown> => Promise.resolve(graphqlResponse()),
+  const graphql = vi.fn((): Promise<unknown> =>
+    Promise.resolve(graphqlResponse()),
   );
-  const restPaginate = vi.fn(
-    (path: string): Promise<unknown[]> =>
-      Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : []),
+  const restPaginate = vi.fn((path: string): Promise<unknown[]> =>
+    Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : []),
   );
   return { graphql, restPaginate } as never;
 }
@@ -107,8 +106,8 @@ function makeApprovalFlippingTransport(): GithubReadTransport & {
   restPaginate: ReturnType<typeof vi.fn>;
 } {
   let reviewsReads = 0;
-  const graphql = vi.fn(
-    (): Promise<unknown> => Promise.resolve(graphqlResponse()),
+  const graphql = vi.fn((): Promise<unknown> =>
+    Promise.resolve(graphqlResponse()),
   );
   const restPaginate = vi.fn((path: string): Promise<unknown[]> => {
     if (!path.includes("/reviews")) {
@@ -135,9 +134,8 @@ function makeLabeledTransport(labelNames: string[]): GithubReadTransport & {
     };
     return Promise.resolve(response);
   });
-  const restPaginate = vi.fn(
-    (path: string): Promise<unknown[]> =>
-      Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : []),
+  const restPaginate = vi.fn((path: string): Promise<unknown[]> =>
+    Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : []),
   );
   return { graphql, restPaginate } as never;
 }
