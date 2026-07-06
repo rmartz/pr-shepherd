@@ -1,7 +1,12 @@
 import { randomUUID } from "node:crypto";
 import type { WorkflowGraph } from "@/config";
 import { Collections } from "@/db/collections";
-import { RunStatus, StepStatus, type StepInstance } from "@/db/schemas";
+import {
+  DEFAULT_STEP_MAX_RETRIES,
+  RunStatus,
+  StepStatus,
+  type StepInstance,
+} from "@/db/schemas";
 import type { Db } from "@/db/types";
 import { evaluateRouting, type RoutingRule } from "@/engine/routing";
 
@@ -34,8 +39,6 @@ import { evaluateRouting, type RoutingRule } from "@/engine/routing";
 // just-completed step (routing conditions may read either `output.*` or the
 // accumulated `context.*`).
 // ---------------------------------------------------------------------------
-
-const DEFAULT_MAX_RETRIES = 3;
 
 export type AdvanceResult =
   | {
@@ -73,7 +76,7 @@ export async function advanceCompletedStep(
 
   const newId = deps.newId ?? ((): string => randomUUID());
   const now = deps.now ?? Date.now;
-  const maxRetries = deps.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const maxRetries = deps.maxRetries ?? DEFAULT_STEP_MAX_RETRIES;
 
   const run = await deps.db.get(Collections.workflowRuns, step.runId);
   if (run === undefined) {

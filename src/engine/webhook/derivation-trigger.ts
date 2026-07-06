@@ -1,6 +1,7 @@
 import { randomUUID } from "node:crypto";
 import { Collections } from "@/db/collections";
 import {
+  DEFAULT_STEP_MAX_RETRIES,
   RunStatus,
   StepStatus,
   StepType,
@@ -84,7 +85,6 @@ export interface TriggerDerivationsDependencies {
   maxRetries?: number;
 }
 
-const DEFAULT_MAX_RETRIES = 3;
 // The step id of the lifecycle's head derivation step (workflows/base-pr.yaml).
 // Re-seeding a run here restarts the derive → evaluate_gates loop.
 const DERIVE_STEP_ID = "derive_pr_state";
@@ -179,7 +179,7 @@ export async function triggerDerivations(
   const prRefs = await resolvePrNumbers(targets, deps);
   const newId = deps.newId ?? (() => randomUUID());
   const now = deps.now ?? Date.now;
-  const maxRetries = deps.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const maxRetries = deps.maxRetries ?? DEFAULT_STEP_MAX_RETRIES;
 
   const triggered: DerivationTrigger[] = [];
   for (const { repo, prNumber } of prRefs) {
