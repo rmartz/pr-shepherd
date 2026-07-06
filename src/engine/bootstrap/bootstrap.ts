@@ -3,9 +3,14 @@ import { createDb as createDbDefault } from "@/db";
 import type { Config } from "@/config";
 import type { Db } from "@/db/types";
 import { startCommandListener } from "@/engine/commands";
+import { assembleRunner, type ExecutionDeps } from "@/engine/execution";
 import { recoverFromCrash } from "@/engine/recovery/startup";
 import { startScheduler } from "@/engine/scheduler";
 import { DiscoveryPhase, runSelfDiscoveryPass } from "@/engine/self-discovery";
+import {
+  createGithubReadTransport,
+  createGithubWriteTransport,
+} from "@/github";
 import { createDiskWorkflowResolver } from "./resolveWorkflow";
 import type { BootstrapDeps, BootstrapOptions, DaemonHandle } from "./types";
 
@@ -43,7 +48,7 @@ function resolveDeps(overrides: Partial<BootstrapDeps> = {}): BootstrapDeps {
         emulator: config.db.emulator,
       }),
     recoverFromCrash: (db) => recoverFromCrash(db),
-    startScheduler: (db, config) =>
+    startScheduler: (db, config, execution) =>
       startScheduler(
         db,
         {
@@ -52,7 +57,10 @@ function resolveDeps(overrides: Partial<BootstrapDeps> = {}): BootstrapDeps {
             intervalSeconds: config.poll.heartbeatIntervalSeconds,
           },
         },
-        { reconcileIntervalMs: config.poll.reconcileIntervalSeconds * 1000 },
+        {
+          reconcileIntervalMs: config.poll.reconcileIntervalSeconds * 1000,
+          execution,
+        },
       ),
     startCommandListener: (db, config) =>
       startCommandListener(db, {
@@ -82,7 +90,38 @@ export async function bootstrapEngine(
   // steps a previous process left mid-flight.
   const crashRecovery = await deps.recoverFromCrash(db);
 
-  const scheduler = deps.startScheduler(db, config);
+  // Assemble the executor registry + execution deps so the scheduler drives the
+  // full loop (admit → run → advance), not admission alone (#290). The runner
+  // wires each StepType to its production executor + `gh`-CLI transports; the
+  // execution pass resolves each run's graph via the same `resolveWorkflow` the
+  // rest of the daemon uses.
+  const runner = assembleRunner({
+    db,
+    readTransport: createGithubReadTransport(),
+    writeTransport: createGithubWriteTransport(),
+    firstStepFactory: (workflowId) => {
+      const first = resolveWorkflow(workflowId)?.steps[0];
+      if (first === undefined) {
+        return Promise.reject(
+          new Error(
+            `fork: workflow "${workflowId}" has no resolvable first step`,
+          ),
+        );
+      }
+      return Promise.resolve({
+        stepDefinitionId: first.id,
+        stepType: first.stepType,
+        input: first.input,
+      });
+    },
+  });
+  const execution: ExecutionDeps = {
+    db,
+    runner,
+    getGraph: resolveWorkflow,
+  };
+
+  const scheduler = deps.startScheduler(db, config, execution);
   const commands = deps.startCommandListener(db, config);
 
   // Enroll the configured repos' open PRs upfront. Subsequent passes are the

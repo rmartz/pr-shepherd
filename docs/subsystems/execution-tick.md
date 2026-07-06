@@ -21,11 +21,9 @@ The `Runner` is injected (as everywhere in the engine), so the tick is testable 
 
 `assembleRunner(deps)` ([source](../../src/engine/execution/assembleRunner.ts), #290) is the composition point that builds the `Runner` this tick drives: it registers every `StepType` with its production executor and dependencies — the `gh`-CLI read transport for `derive_pr_state`, the write transport for `github_api`, the Claude subprocess for `claude_skill`, and the workflow registry's `firstStepFactory` for `fork`. `StepType.Decision` maps to `evaluateGatesExecutor` (the only decision-type step any workflow defines is `evaluate_gates`; the generic no-op `decisionExecutor` is an unused placeholder).
 
-## Boundary: the daemon loop wiring is deferred
+## Driven by the daemon loop
 
-This module and `assembleRunner` are the execution _logic_ and its composition. What remains (the final slice of [#290](https://github.com/rmartz/pr-shepherd/issues/290)):
-
-- **Daemon loop wiring** — driving admission + execution ticks from the daemon's scheduler (`startScheduler`), on a cadence that does not block admission while long steps run, with graceful-shutdown drain of in-flight `dispatchAndAdvance` chains.
+`startScheduler` accepts an optional `execution` (an `ExecutionDeps`); when the daemon supplies it, each tick runs `runExecutionTick` **after** admission, inside the scheduler's already-serialized tick. Because the scheduler never runs two ticks concurrently, execution and admission never overlap — so **no two `runExecutionTick` calls race and no step is double-dispatched**. The bootstrap constructs the `ExecutionDeps` (assembled runner + the `resolveWorkflow`-backed `getGraph`) and passes it in. The trade-off of the serialized single-flight loop: a long-running step blocks admission for its duration — acceptable for the v1 loop, and the execution work rides the scheduler's existing `inFlight` promise, so shutdown drains it. See [Event-Driven Scheduler](event-driven-scheduler.md) and [Engine Bootstrap](engine-bootstrap.md).
 
 ## Related
 

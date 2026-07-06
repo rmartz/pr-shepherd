@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Collections } from "@/db/collections";
-import { StepStatus } from "@/db/schemas";
+import { StepStatus, StepType, type StepInstance } from "@/db/schemas";
+import type { Runner } from "@/engine/runner";
 import type { HeartbeatFailure } from "./heartbeat";
 import {
   startScheduler,
@@ -88,6 +89,62 @@ describe("startScheduler ticks when a trigger fires", () => {
     await handle.stop();
 
     expect(ticks).toBe(1);
+  });
+});
+
+describe("startScheduler runs the execution pass when wired", () => {
+  it("dispatches a queued step through the runner during the tick", async () => {
+    const db = makeDb();
+    const { timers, fireDelay } = makeFakeTimers();
+    // A queued step for the execution pass to drain (admission ignores it — it
+    // only moves pending → queued).
+    const queuedStep: StepInstance = {
+      id: "step-queued",
+      runId: "run-1",
+      stepDefinitionId: "d",
+      stepType: StepType.GithubApi,
+      status: StepStatus.Queued,
+      input: {},
+      output: {},
+      logs: [],
+      retryCount: 0,
+      maxRetries: 3,
+      createdAt: 1,
+      metrics: {
+        claudeMs: 0,
+        activeMs: 0,
+        scheduleWaitMs: 0,
+        externalWaitMs: 0,
+      },
+    };
+    await db.create(Collections.stepInstances, queuedStep);
+    const dispatched: string[] = [];
+    const runner: Runner = {
+      register: () => undefined,
+      dispatch: (step) => {
+        dispatched.push(step.id);
+        return Promise.resolve();
+      },
+    };
+    let fire: (() => void) | undefined;
+    const capture: TriggerSubscription = (_db, onTrigger) => {
+      fire = onTrigger;
+      return noop;
+    };
+    const handle = startScheduler(db, makeConfig(), {
+      reconcileIntervalMs: RECONCILE_MS,
+      debounceMs: DEBOUNCE_MS,
+      triggers: [capture],
+      timers,
+      execution: { db, runner, getGraph: () => undefined },
+    });
+
+    fire?.();
+    fireDelay(DEBOUNCE_MS);
+    await flush();
+    await handle.stop();
+
+    expect(dispatched).toEqual(["step-queued"]);
   });
 });
 
