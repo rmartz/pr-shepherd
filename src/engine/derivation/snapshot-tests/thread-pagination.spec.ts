@@ -47,11 +47,8 @@ describe("review threads are fully paginated, not truncated at 100", () => {
       base.repository.pullRequest.reviewThreads = threads;
       return Promise.resolve(base);
     });
-    const restPaginate = vi.fn(
-      (path: string): Promise<unknown[]> =>
-        Promise.resolve(
-          path.includes("/reviews") ? REST_REVIEWS : REST_COMMENTS,
-        ),
+    const restPaginate = vi.fn((path: string): Promise<unknown[]> =>
+      Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : REST_COMMENTS),
     );
     const transport = {
       graphql,

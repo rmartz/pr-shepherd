@@ -153,8 +153,7 @@ describe("pushes the receivedAt window to the DB layer", () => {
     );
     expect(webhookListCall).toBeDefined();
     const range = webhookListCall?.[2] as
-      | RangeConstraint<{ receivedAt: number }>[]
-      | undefined;
+      RangeConstraint<{ receivedAt: number }>[] | undefined;
     expect(range).toEqual([
       {
         field: "receivedAt",

@@ -72,8 +72,7 @@ export enum AdmissionRejectReason {
 }
 
 export type AdmissionDecision =
-  | { admit: true }
-  | { admit: false; reason: AdmissionRejectReason };
+  { admit: true } | { admit: false; reason: AdmissionRejectReason };
 
 // Does the given step type count against the per-repo concurrency cap?
 // See vision §4.3 — `claude_skill`, `github_api`, `wait_author_push`, and

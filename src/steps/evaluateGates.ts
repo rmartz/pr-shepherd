@@ -118,18 +118,14 @@ export const evaluateGatesExecutor: StepExecutor = (
     }
     const mutation = reconcileVerdict(VerdictLabel.EscalationNeeded, labels);
     const escalationActions: GithubAction[] = [
-      ...mutation.add.map(
-        (label): GithubAction => ({
-          type: GithubActionType.AddLabel,
-          params: { repo, pr, label },
-        }),
-      ),
-      ...mutation.remove.map(
-        (label): GithubAction => ({
-          type: GithubActionType.RemoveLabel,
-          params: { repo, pr, label },
-        }),
-      ),
+      ...mutation.add.map((label): GithubAction => ({
+        type: GithubActionType.AddLabel,
+        params: { repo, pr, label },
+      })),
+      ...mutation.remove.map((label): GithubAction => ({
+        type: GithubActionType.RemoveLabel,
+        params: { repo, pr, label },
+      })),
     ];
     return Promise.resolve({
       output: { action, blockingGate, escalationActions },

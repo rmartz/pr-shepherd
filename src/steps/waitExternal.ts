@@ -97,8 +97,7 @@ export interface WaitExternalOptions {
 }
 
 export type WaitExternalResult =
-  | { passed: true }
-  | { passed: false; reason: "timeout" | "error" };
+  { passed: true } | { passed: false; reason: "timeout" | "error" };
 
 // ---------------------------------------------------------------------------
 // Core: runs the wait subprocess and returns a result. All side effects

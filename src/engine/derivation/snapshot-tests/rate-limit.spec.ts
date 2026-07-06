@@ -16,11 +16,8 @@ describe("a rate-limit error is retried once after a backoff", () => {
       if (calls === 1) return Promise.reject(new GithubRateLimitError());
       return Promise.resolve(graphqlResponse());
     });
-    const restPaginate = vi.fn(
-      (path: string): Promise<unknown[]> =>
-        Promise.resolve(
-          path.includes("/reviews") ? REST_REVIEWS : REST_COMMENTS,
-        ),
+    const restPaginate = vi.fn((path: string): Promise<unknown[]> =>
+      Promise.resolve(path.includes("/reviews") ? REST_REVIEWS : REST_COMMENTS),
     );
     const transport = {
       graphql,
