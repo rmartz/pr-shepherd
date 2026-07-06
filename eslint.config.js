@@ -46,6 +46,14 @@ export default tseslint.config(
     rules: {
       "react-hooks/rules-of-hooks": "error",
       "react-hooks/exhaustive-deps": "error",
+      // File-length hard cap (source tier: 400). Counts every physical line so
+      // it matches the recommended-limit intent; test files + fixtures get the
+      // 600 tier in a later override (last-match-wins). Replaces the bespoke
+      // file-length CI job + check-file-length.mjs.
+      "max-lines": [
+        "error",
+        { max: 400, skipBlankLines: false, skipComments: false },
+      ],
     },
   },
   {
@@ -77,6 +85,17 @@ export default tseslint.config(
       "@typescript-eslint/no-unsafe-argument": "off",
       "@typescript-eslint/restrict-template-expressions": "off",
       "@typescript-eslint/no-non-null-assertion": "off",
+    },
+  },
+  // Test files + fixtures get the 600-line tier (last-match-wins overrides the
+  // 400 source cap above). Matches the recommended-limit intent for tests.
+  {
+    files: ["src/**/*.spec.{ts,tsx}", "src/**/*-tests/**/*.{ts,tsx}"],
+    rules: {
+      "max-lines": [
+        "error",
+        { max: 600, skipBlankLines: false, skipComments: false },
+      ],
     },
   },
   // Storybook stories use loose patterns; skip strict type checking

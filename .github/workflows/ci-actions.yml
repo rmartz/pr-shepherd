@@ -17,7 +17,8 @@ jobs:
   # documentation-only PRs. Default-run / denylist model (issue #258): the
   # heavy jobs run unless EVERY changed file is provably-inert documentation,
   # so a new or unanticipated file type fails safe (runs the suite) instead of
-  # open (skips it). Format / file-length / secret-scan are NOT gated here.
+  # open (skips it). Format / secret-scan are NOT gated here. (The file-length
+  # cap is now the ESLint max-lines rule, enforced by the gated Lint job.)
   detect-changes:
     name: Detect changes
     runs-on: ubuntu-latest
