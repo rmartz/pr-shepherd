@@ -2,6 +2,7 @@ import { randomUUID } from "node:crypto";
 import type { WorkflowGraph } from "@/config";
 import { Collections } from "@/db/collections";
 import {
+  DEFAULT_STEP_MAX_RETRIES,
   RunStatus,
   StepStatus,
   type StepInstance,
@@ -53,8 +54,6 @@ export interface EnrollResult {
   created: boolean;
 }
 
-const DEFAULT_MAX_RETRIES = 3;
-
 export async function enrollPr(
   db: Db,
   pr: DiscoveredPr,
@@ -68,7 +67,7 @@ export async function enrollPr(
 
   const newId = options.newId ?? (() => randomUUID());
   const now = options.now ?? Date.now;
-  const maxRetries = options.maxRetries ?? DEFAULT_MAX_RETRIES;
+  const maxRetries = options.maxRetries ?? DEFAULT_STEP_MAX_RETRIES;
 
   const firstStep = graph.steps[0];
   if (firstStep === undefined) {

@@ -41,3 +41,10 @@ export const StepInstanceSchema = z
   .strict();
 
 export type StepInstance = z.infer<typeof StepInstanceSchema>;
+
+// The default per-step retry budget seeded on a new step instance's
+// `maxRetries` when the caller does not override it. Shared by every module
+// that creates a step (enrollment, advance-on-completion, the webhook
+// derivation trigger) so the default never drifts between them (#287). Distinct
+// from `github_api`'s own per-action retry cap.
+export const DEFAULT_STEP_MAX_RETRIES = 3;
