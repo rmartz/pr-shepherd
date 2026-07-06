@@ -15,9 +15,9 @@
 # relative path resolves against each worktree's own root.
 #
 # The file-length hard cap is now the ESLint `max-lines` rule, enforced by
-# `pnpm lint` (pre-push-verify and CI) and, at edit time, by the PostToolUse
-# hook in `.claude/settings.json`. There is no separate length check here, so
-# this hook stays zero-dependency (node only, no node_modules) and just hands
+# `pnpm lint` (pre-push-verify and CI) and, for the primary checkout, by
+# lint-staged. There is no separate length check here, so this hook stays
+# zero-dependency (node only, no node_modules) and just hands
 # off to husky in the primary checkout.
 #
 # Husky coexistence (#185): core.hooksPath is repo-wide, so pointing it here

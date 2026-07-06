@@ -13,9 +13,8 @@ pnpm exec lint-staged
 # Local deployment-config validation (a repo-local script) still runs at commit.
 node scripts/validate-config.mjs
 # The file-length hard cap is now the ESLint `max-lines` rule: enforced here for
-# the primary checkout via lint-staged (eslint on staged files), at edit time by
-# the PostToolUse hook in .claude/settings.json, and in CI + pre-push-verify via
-# `pnpm lint`. There is no separate length check.
+# the primary checkout via lint-staged (eslint on staged files), and in CI +
+# pre-push-verify via `pnpm lint`. There is no separate length check.
 #
 # Secret scanning has moved out of this repo: vercel-deploy-scripts (which
 # provided the `secrets-check` bin) was removed as an npm dependency and is being
