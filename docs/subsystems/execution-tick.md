@@ -17,12 +17,15 @@ tags: [engine, execution-loop, scheduler, runner, routing]
 
 The `Runner` is injected (as everywhere in the engine), so the tick is testable with a scripted executor and production controls the executor registry.
 
-## Boundary: the production wiring is deferred
+## Executor-registry assembly
 
-This is the orchestration _logic_. What is **not** here — and is the remaining slice of [#284](https://github.com/rmartz/pr-shepherd/issues/284):
+`assembleRunner(deps)` ([source](../../src/engine/execution/assembleRunner.ts), #290) is the composition point that builds the `Runner` this tick drives: it registers every `StepType` with its production executor and dependencies — the `gh`-CLI read transport for `derive_pr_state`, the write transport for `github_api`, the Claude subprocess for `claude_skill`, and the workflow registry's `firstStepFactory` for `fork`. `StepType.Decision` maps to `evaluateGatesExecutor` (the only decision-type step any workflow defines is `evaluate_gates`; the generic no-op `decisionExecutor` is an unused placeholder).
 
-- **Executor-registry assembly** — constructing `createRunner` with the concrete step executors and their GitHub read/write transports and Claude subprocess. Those production transports do not exist yet (only interfaces + test fakes), so the registry cannot be assembled.
-- **Daemon loop wiring** — driving admission + execution ticks from the daemon's scheduler. A daemon that must not block admission while long steps run drives execution on its own cadence.
+## Boundary: the daemon loop wiring is deferred
+
+This module and `assembleRunner` are the execution _logic_ and its composition. What remains (the final slice of [#290](https://github.com/rmartz/pr-shepherd/issues/290)):
+
+- **Daemon loop wiring** — driving admission + execution ticks from the daemon's scheduler (`startScheduler`), on a cadence that does not block admission while long steps run, with graceful-shutdown drain of in-flight `dispatchAndAdvance` chains.
 
 ## Related
 
