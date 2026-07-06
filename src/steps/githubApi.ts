@@ -1,4 +1,6 @@
 import { z } from "zod";
+import type { StepInstance } from "@/db/schemas";
+import type { ExecutorResult, StepExecutor } from "@/engine/runner";
 
 // ---------------------------------------------------------------------------
 // `github_api` step executor.
@@ -221,6 +223,21 @@ export async function runGithubApi(
   }
 
   return { results, partial_failure: partialFailure };
+}
+
+// The `StepExecutor` adapter the runner registers for `StepType.GithubApi`.
+// Parses the step's action batch, runs it through `runGithubApi` against the
+// injected transport, and returns the per-action results + partial-failure flag
+// as the step output (which the routing DSL can branch on). The production
+// daemon constructs this with the `gh`-CLI write transport (#290).
+export function createGithubApiExecutor(
+  opts: RunGithubApiOptions,
+): StepExecutor {
+  return async (step: StepInstance): Promise<ExecutorResult> => {
+    const input = GithubApiInputSchema.parse(step.input);
+    const { results, partial_failure } = await runGithubApi(input, opts);
+    return { output: { results, partial_failure } };
+  };
 }
 
 interface RetryConfig {
