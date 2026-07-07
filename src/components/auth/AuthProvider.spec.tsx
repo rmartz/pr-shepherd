@@ -1,12 +1,22 @@
 import { describe, it, expect, vi, afterEach } from "vitest";
 import { useContext } from "react";
-import { render, screen, cleanup, act } from "@testing-library/react";
+import {
+  render,
+  screen,
+  cleanup,
+  act,
+  fireEvent,
+  waitFor,
+} from "@testing-library/react";
 import type { User } from "firebase/auth";
 import { AuthProvider, AuthContext } from "./AuthProvider";
 
 // `onAuthStateChanged` is invoked inside AuthProvider's useEffect. The mock
 // captures the listener so each test can drive auth state transitions.
+// `signOut` is a spy so the sign-out test can assert the provider delegates to
+// Firebase.
 let capturedListener: ((user: User | null) => void) | undefined;
+const firebaseSignOut = vi.fn(() => Promise.resolve());
 
 vi.mock("firebase/auth", () => ({
   onAuthStateChanged: vi.fn((_auth, listener) => {
@@ -15,6 +25,7 @@ vi.mock("firebase/auth", () => ({
       capturedListener = undefined;
     };
   }),
+  signOut: () => firebaseSignOut(),
 }));
 
 vi.mock("@/lib/firebase/client", () => ({
@@ -24,6 +35,7 @@ vi.mock("@/lib/firebase/client", () => ({
 afterEach(() => {
   cleanup();
   capturedListener = undefined;
+  firebaseSignOut.mockClear();
 });
 
 function ContextProbe() {
@@ -32,6 +44,20 @@ function ContextProbe() {
     <span data-testid="probe">
       {value.loading ? "loading" : value.user ? value.user.email : "signed-out"}
     </span>
+  );
+}
+
+function SignOutProbe() {
+  const { signOut } = useContext(AuthContext);
+  return (
+    <button
+      type="button"
+      onClick={() => {
+        void signOut();
+      }}
+    >
+      sign out
+    </button>
   );
 }
 
@@ -71,5 +97,20 @@ describe("AuthProvider on sign-out", () => {
       capturedListener?.(null);
     });
     expect(screen.getByTestId("probe").textContent).toBe("signed-out");
+  });
+});
+
+describe("AuthProvider signOut", () => {
+  it("delegates to Firebase signOut", async () => {
+    render(
+      <AuthProvider>
+        <SignOutProbe />
+      </AuthProvider>,
+    );
+    // TODO: upgrade to userEvent.click when @testing-library/user-event is available
+    fireEvent.click(screen.getByRole("button", { name: "sign out" }));
+    await waitFor(() => {
+      expect(firebaseSignOut).toHaveBeenCalledOnce();
+    });
   });
 });
