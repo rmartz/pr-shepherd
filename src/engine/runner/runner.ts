@@ -88,6 +88,15 @@ export function createRunner(db: Db, executors: ExecutorMap = {}): Runner {
       return;
     }
 
+    if (result.suspended === true) {
+      // Fan-out (#280): the executor spawned child steps and parked itself.
+      // Leave it `waiting` — not terminal — so the scheduler's fan-in join
+      // resumes it once the children finish. No output merge or metrics rollup
+      // happens here; that is deferred to the join.
+      await suspendStep(db, runningStep);
+      return;
+    }
+
     await completeStep(db, runningStep, result);
   };
 
@@ -178,6 +187,22 @@ async function failStep(
     runMetricIncrements(stepDelta),
     { updatedAt: completedAt },
   );
+}
+
+// Park a step in `waiting` after its executor suspended for fan-out (#280).
+// Unlike `completeStep`/`failStep` this is non-terminal: no output merge, no
+// metrics rollup — the terminal write and rollup happen in the fan-in join once
+// the children finish. Idempotent: a step already `waiting` (e.g. the executor
+// also called `runtime.enterWaiting`) keeps its original `waitingAt`.
+async function suspendStep(db: Db, step: StepInstance): Promise<void> {
+  const fresh = (await db.get(Collections.stepInstances, step.id)) ?? step;
+  if (fresh.status === StepStatus.Waiting) {
+    return;
+  }
+  await db.update(Collections.stepInstances, step.id, {
+    status: StepStatus.Waiting,
+    waitingAt: fresh.waitingAt ?? Date.now(),
+  });
 }
 
 function addStepDelta(
