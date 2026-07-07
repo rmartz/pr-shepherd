@@ -30,11 +30,11 @@ import { getClientFirestore } from "./client";
 const DEFAULT_RUNS_LIMIT = 100;
 
 // Subscribe to the most recent workflow runs, newest first. `onData` fires on
-// every snapshot with the decoded runs; `onError` receives Firestore errors
-// (e.g. a permission failure once the user signs out).
+// every snapshot with the decoded runs; `onError` receives Firestore transport
+// errors (e.g. permission-denied on sign-out) and schema decode errors.
 export function subscribeToRuns(
   onData: (runs: WorkflowRun[]) => void,
-  onError?: (error: FirestoreError) => void,
+  onError?: (error: unknown) => void,
   runsLimit: number = DEFAULT_RUNS_LIMIT,
 ): Unsubscribe {
   const runsQuery = query(
@@ -45,22 +45,32 @@ export function subscribeToRuns(
   return onSnapshot(
     runsQuery,
     (snapshot) => {
-      onData(
-        snapshot.docs.map((doc) =>
+      let decoded: WorkflowRun[];
+      try {
+        decoded = snapshot.docs.map((doc) =>
           Collections.workflowRuns.schema.parse(doc.data()),
-        ),
-      );
+        );
+      } catch (err) {
+        onError?.(err);
+        return;
+      }
+      onData(decoded);
     },
-    onError,
+    onError
+      ? (e: FirestoreError) => {
+          onError(e);
+        }
+      : undefined,
   );
 }
 
 // Subscribe to every step instance of one run. `onData` fires on every snapshot
-// with the decoded steps.
+// with the decoded steps; `onError` receives Firestore transport errors and
+// schema decode errors.
 export function subscribeToSteps(
   runId: string,
   onData: (steps: StepInstance[]) => void,
-  onError?: (error: FirestoreError) => void,
+  onError?: (error: unknown) => void,
 ): Unsubscribe {
   const stepsQuery = query(
     collection(getClientFirestore(), Collections.stepInstances.name),
@@ -69,12 +79,21 @@ export function subscribeToSteps(
   return onSnapshot(
     stepsQuery,
     (snapshot) => {
-      onData(
-        snapshot.docs.map((doc) =>
+      let decoded: StepInstance[];
+      try {
+        decoded = snapshot.docs.map((doc) =>
           Collections.stepInstances.schema.parse(doc.data()),
-        ),
-      );
+        );
+      } catch (err) {
+        onError?.(err);
+        return;
+      }
+      onData(decoded);
     },
-    onError,
+    onError
+      ? (e: FirestoreError) => {
+          onError(e);
+        }
+      : undefined,
   );
 }
