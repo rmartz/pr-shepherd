@@ -21,10 +21,18 @@ export const StepInstanceSchema = z
     id: z.string(),
     runId: z.string(),
     // Present only on a fan-out child step: the `id` of the parent step that
-    // spawned it (#280). The scheduler joins a `waiting` parent once every step
-    // carrying its id here has reached a terminal state. Absent on ordinary
-    // steps and on fan-out parents themselves.
+    // spawned it (#280). The scheduler joins a `waiting` parent once every
+    // *required* step carrying its id here has reached a terminal state. Absent
+    // on ordinary steps and on fan-out parents themselves.
     parentStepId: z.string().optional(),
+    // Fan-out child policy (#313), both absent on ordinary steps:
+    //   `optional` — an optional child never gates its parent's join, and its
+    //     failure is ignored (fire-and-forget side effects). Required by default.
+    //   `deadlineAt` — an epoch-ms bound; a non-terminal child past it is
+    //     force-terminated as `skipped`, so a required child's wait is bounded
+    //     ("wait N for Copilot, then proceed without it") and can never hang.
+    deadlineAt: z.number().int().nonnegative().optional(),
+    optional: z.boolean().optional(),
     stepDefinitionId: z.string(),
     stepType: z.enum(StepType),
     status: z.enum(StepStatus),

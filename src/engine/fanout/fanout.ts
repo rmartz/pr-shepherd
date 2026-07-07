@@ -34,6 +34,13 @@ export interface FanOutChildSpec {
   stepDefinitionId: string;
   input: Record<string, unknown>;
   maxRetries?: number;
+  // Fan-out child policy (#313). `optional` children never gate the join and
+  // their failure is ignored. `deadlineMs` is a wait bound *relative to spawn*:
+  // if the child is still non-terminal that many ms after being spawned, the
+  // join force-terminates it as `skipped`. Both default to unset (required, no
+  // deadline).
+  optional?: boolean;
+  deadlineMs?: number;
 }
 
 export interface SpawnChildStepsOptions {
@@ -70,6 +77,12 @@ export async function spawnChildSteps(
       id: newId(),
       runId: parent.runId,
       parentStepId: parent.id,
+      // Only persist policy fields when set, so ordinary and required children
+      // carry neither.
+      ...(spec.optional === true ? { optional: true } : {}),
+      ...(spec.deadlineMs !== undefined
+        ? { deadlineAt: base + spec.deadlineMs }
+        : {}),
       stepDefinitionId: spec.stepDefinitionId,
       stepType: spec.stepType,
       status: StepStatus.Pending,

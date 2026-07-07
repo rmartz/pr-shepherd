@@ -67,28 +67,86 @@ interface AggregatedChild {
   output: Record<string, unknown>;
 }
 
-// Resume every fan-out parent whose children are all terminal.
+// Resume every fan-out parent whose *required* children are all terminal.
 export async function runJoinTick(deps: JoinDeps): Promise<JoinTickReport> {
+  const nowMs = (deps.now ?? Date.now)();
   const waiting = await deps.db.list(Collections.stepInstances, {
     status: StepStatus.Waiting,
   });
 
   const joined: JoinOutcome[] = [];
   for (const parent of waiting) {
-    const children = await deps.db.list(Collections.stepInstances, {
+    const rawChildren = await deps.db.list(Collections.stepInstances, {
       parentStepId: parent.id,
     });
     // No children → an external `wait_*` step, not a fan-out parent. Leave it.
-    if (children.length === 0) {
+    if (rawChildren.length === 0) {
       continue;
     }
-    // Still joining: at least one child has not reached a terminal state.
-    if (!children.every((c) => TERMINAL_CHILD_STATUSES.has(c.status))) {
+    // Force-terminate any child past its deadline as `skipped` (#313) before
+    // deciding whether the parent can join — this is what bounds a required
+    // child's wait.
+    const children = await enforceDeadlines(rawChildren, nowMs, deps.db);
+    // Optional children (#313) never gate the join; wait only on required ones.
+    const stillWaiting = children.some(
+      (c) => c.optional !== true && !TERMINAL_CHILD_STATUSES.has(c.status),
+    );
+    if (stillWaiting) {
       continue;
     }
     joined.push(await joinParent(parent, children, deps));
   }
   return { joined };
+}
+
+// Mark any non-terminal child whose deadline has passed as `skipped`, returning
+// the children with those statuses updated so the caller sees the effect this
+// tick. Restart-safe: derived from the persisted `deadlineAt`, so a crash simply
+// re-evaluates the same bound on a later tick.
+async function enforceDeadlines(
+  children: StepInstance[],
+  nowMs: number,
+  db: Db,
+): Promise<StepInstance[]> {
+  const result: StepInstance[] = [];
+  for (const child of children) {
+    if (
+      child.deadlineAt !== undefined &&
+      child.deadlineAt <= nowMs &&
+      !TERMINAL_CHILD_STATUSES.has(child.status)
+    ) {
+      const stepDelta = computeStepMetrics({ ...child, completedAt: nowMs });
+      const nextMetrics: StepInstance["metrics"] = {
+        claudeMs: child.metrics.claudeMs + stepDelta.claudeMs,
+        activeMs: child.metrics.activeMs + stepDelta.activeMs,
+        scheduleWaitMs: child.metrics.scheduleWaitMs + stepDelta.scheduleWaitMs,
+        externalWaitMs: child.metrics.externalWaitMs + stepDelta.externalWaitMs,
+      };
+      await db.update(Collections.stepInstances, child.id, {
+        status: StepStatus.Skipped,
+        completedAt: nowMs,
+        metrics: nextMetrics,
+      });
+      const run = await db.get(Collections.workflowRuns, child.runId);
+      if (run !== undefined) {
+        await db.increment(
+          Collections.workflowRuns,
+          child.runId,
+          runMetricIncrements(stepDelta),
+          { updatedAt: nowMs },
+        );
+      }
+      result.push({
+        ...child,
+        status: StepStatus.Skipped,
+        completedAt: nowMs,
+        metrics: nextMetrics,
+      });
+    } else {
+      result.push(child);
+    }
+  }
+  return result;
 }
 
 async function joinParent(
@@ -111,8 +169,12 @@ async function joinParent(
   }));
   const output = { children: aggregatedChildren };
 
-  // Any failed child fails the parent; otherwise it completes.
-  const anyFailed = ordered.some((c) => c.status === StepStatus.Failed);
+  // A failed *required* child fails the parent (halting the run for a human);
+  // an optional child's failure is ignored (#313). Otherwise the parent
+  // completes.
+  const anyFailed = ordered.some(
+    (c) => c.optional !== true && c.status === StepStatus.Failed,
+  );
   const status = anyFailed ? StepStatus.Failed : StepStatus.Completed;
 
   const completedAt = now();
