@@ -45,15 +45,16 @@ export function subscribeToRuns(
   return onSnapshot(
     runsQuery,
     (snapshot) => {
+      let decoded: WorkflowRun[];
       try {
-        onData(
-          snapshot.docs.map((doc) =>
-            Collections.workflowRuns.schema.parse(doc.data()),
-          ),
+        decoded = snapshot.docs.map((doc) =>
+          Collections.workflowRuns.schema.parse(doc.data()),
         );
       } catch (err) {
         onError?.(err);
+        return;
       }
+      onData(decoded);
     },
     onError
       ? (e: FirestoreError) => {
@@ -78,15 +79,16 @@ export function subscribeToSteps(
   return onSnapshot(
     stepsQuery,
     (snapshot) => {
+      let decoded: StepInstance[];
       try {
-        onData(
-          snapshot.docs.map((doc) =>
-            Collections.stepInstances.schema.parse(doc.data()),
-          ),
+        decoded = snapshot.docs.map((doc) =>
+          Collections.stepInstances.schema.parse(doc.data()),
         );
       } catch (err) {
         onError?.(err);
+        return;
       }
+      onData(decoded);
     },
     onError
       ? (e: FirestoreError) => {

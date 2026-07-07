@@ -112,6 +112,14 @@ describe("subscribeToRuns decodes snapshot docs to WorkflowRun", () => {
     capturedOnError?.(error);
     expect(onError).toHaveBeenCalledWith(error);
   });
+
+  it("routes schema decode errors to onError", () => {
+    const onError = vi.fn();
+    subscribeToRuns(vi.fn(), onError);
+
+    capturedOnNext?.(snapshotOf([{ invalid: "data" }]));
+    expect(onError).toHaveBeenCalled();
+  });
 });
 
 describe("subscribeToSteps decodes snapshot docs to StepInstance", () => {
@@ -132,5 +140,13 @@ describe("subscribeToSteps decodes snapshot docs to StepInstance", () => {
     const error = new Error("permission-denied");
     capturedOnError?.(error);
     expect(onError).toHaveBeenCalledWith(error);
+  });
+
+  it("routes schema decode errors to onError", () => {
+    const onError = vi.fn();
+    subscribeToSteps("run-9", vi.fn(), onError);
+
+    capturedOnNext?.(snapshotOf([{ invalid: "data" }]));
+    expect(onError).toHaveBeenCalled();
   });
 });
