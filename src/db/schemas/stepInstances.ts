@@ -20,6 +20,11 @@ export const StepInstanceSchema = z
   .object({
     id: z.string(),
     runId: z.string(),
+    // Present only on a fan-out child step: the `id` of the parent step that
+    // spawned it (#280). The scheduler joins a `waiting` parent once every step
+    // carrying its id here has reached a terminal state. Absent on ordinary
+    // steps and on fan-out parents themselves.
+    parentStepId: z.string().optional(),
     stepDefinitionId: z.string(),
     stepType: z.enum(StepType),
     status: z.enum(StepStatus),
