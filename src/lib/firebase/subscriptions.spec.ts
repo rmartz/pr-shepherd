@@ -103,6 +103,15 @@ describe("subscribeToRuns decodes snapshot docs to WorkflowRun", () => {
       makeRun({ id: "b" }),
     ]);
   });
+
+  it("forwards Firestore errors to onError", () => {
+    const onError = vi.fn();
+    subscribeToRuns(vi.fn(), onError);
+
+    const error = new Error("permission-denied");
+    capturedOnError?.(error);
+    expect(onError).toHaveBeenCalledWith(error);
+  });
 });
 
 describe("subscribeToSteps decodes snapshot docs to StepInstance", () => {
