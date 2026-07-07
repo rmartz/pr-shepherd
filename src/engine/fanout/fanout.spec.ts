@@ -9,6 +9,7 @@ import {
   type WorkflowRun,
 } from "@/db/schemas";
 import { createRunner } from "@/engine/runner";
+import { dispatchAndAdvance } from "@/engine/execution/executionTick";
 import { spawnChildSteps, type FanOutChildSpec } from "./fanout";
 
 // ---------------------------------------------------------------------------
@@ -142,5 +143,71 @@ describe("the runner parks a suspended fan-out parent in waiting", () => {
       StepStatus.Pending,
       StepStatus.Pending,
     ]);
+  });
+});
+
+describe("dispatchAndAdvance does not route fan-out children", () => {
+  it("dispatches children through the full execution path, parent stays waiting with no spurious successors", async () => {
+    const db = createInMemoryDb();
+    await db.create(Collections.workflowRuns, makeRun());
+    await db.create(
+      Collections.stepInstances,
+      makeParent({ status: StepStatus.Queued }),
+    );
+
+    let n = 0;
+    // Parent executor: spawns children and suspends. Child executor: completes normally.
+    const runner = createRunner(db, {
+      [StepType.GithubApi]: async (step) => {
+        if (step.parentStepId === undefined) {
+          await spawnChildSteps(db, step, specs, {
+            newId: () => `child-${(n += 1)}`,
+            now: () => 4000,
+          });
+          return { output: {}, suspended: true };
+        }
+        return { output: { done: true } };
+      },
+    });
+    const deps = {
+      db,
+      runner,
+      // getGraph is never reached for children (guarded by parentStepId check).
+      getGraph: (): undefined => undefined,
+    };
+
+    // Dispatch the parent: it suspends and spawns children.
+    await dispatchAndAdvance(makeParent({ status: StepStatus.Queued }), deps);
+    const parentAfterSuspend = await db.get(
+      Collections.stepInstances,
+      "parent-1",
+    );
+    expect(parentAfterSuspend?.status).toBe(StepStatus.Waiting);
+
+    // Dispatch each child through dispatchAndAdvance (the real execution path).
+    const children = await db.list(Collections.stepInstances, {
+      parentStepId: "parent-1",
+    });
+    expect(children).toHaveLength(2);
+    for (const child of children) {
+      await dispatchAndAdvance(child, deps);
+    }
+
+    // Parent must still be waiting — children completing does not route the parent.
+    const parentAfterChildren = await db.get(
+      Collections.stepInstances,
+      "parent-1",
+    );
+    expect(parentAfterChildren?.status).toBe(StepStatus.Waiting);
+
+    // No spurious successor steps were created by dispatching children.
+    // Only parent + 2 children exist; routing a child would have created a 4th.
+    const allChildren = await db.list(Collections.stepInstances, {
+      parentStepId: "parent-1",
+    });
+    expect(allChildren).toHaveLength(2);
+    expect(allChildren.every((c) => c.status === StepStatus.Completed)).toBe(
+      true,
+    );
   });
 });

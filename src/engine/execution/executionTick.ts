@@ -74,6 +74,13 @@ export async function dispatchAndAdvance(
   if (fresh?.status !== StepStatus.Completed) {
     return { stepInstanceId: step.id, terminalStatus };
   }
+  // Fan-out children (#280) have no routing of their own — the join resumes
+  // the parent once all children are terminal. Calling `advanceCompletedStep`
+  // on a child would create a duplicate successor step and overwrite
+  // `run.currentStepId` before the parent join fires, corrupting run state.
+  if (fresh.parentStepId !== undefined) {
+    return { stepInstanceId: step.id, terminalStatus };
+  }
 
   const advance = await advanceCompletedStep(fresh, {
     db: deps.db,

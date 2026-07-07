@@ -126,19 +126,24 @@ async function joinParent(
   await deps.db.update(Collections.stepInstances, parent.id, {
     status,
     output,
+    ...(anyFailed ? { error: "One or more child steps failed" } : {}),
     completedAt,
     metrics: nextMetrics,
   });
 
-  // Merge the aggregate into the run context and roll the parent's own delta
-  // into the run total — mirroring the runner's terminal writes. The children's
-  // deltas were already rolled in as each child completed, so this adds only the
+  // Roll the parent's own delta into the run total and — for a successful
+  // completion — merge the aggregate into the run context, mirroring the
+  // runner's terminal writes. A failed parent skips the context merge (matching
+  // the runner's `failStep`, which only rolls metrics). The children's deltas
+  // were already rolled in as each child completed, so this adds only the
   // parent's own (fan-out wait) time, never double-counting the children.
   const run = await deps.db.get(Collections.workflowRuns, parent.runId);
   if (run !== undefined) {
-    await deps.db.update(Collections.workflowRuns, parent.runId, {
-      context: { ...run.context, ...output },
-    });
+    if (!anyFailed) {
+      await deps.db.update(Collections.workflowRuns, parent.runId, {
+        context: { ...run.context, ...output },
+      });
+    }
     await deps.db.increment(
       Collections.workflowRuns,
       parent.runId,

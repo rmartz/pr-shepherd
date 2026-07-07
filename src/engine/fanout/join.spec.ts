@@ -188,9 +188,14 @@ describe("runJoinTick resumes a fan-out parent whose children are all terminal",
     ]);
     const parent = await db.get(Collections.stepInstances, "parent-1");
     expect(parent?.status).toBe(StepStatus.Failed);
+    // A failed parent records an error, mirroring the runner's failStep.
+    expect(parent?.error).toBeDefined();
     // A failed parent does not route onward — no successor step exists.
     const next = await db.get(Collections.stepInstances, "finalize-instance");
     expect(next).toBeUndefined();
+    // A failed parent does not merge output into the run context.
+    const run = await db.get(Collections.workflowRuns, "run-1");
+    expect(run?.context).toEqual({});
   });
 });
 
