@@ -234,6 +234,35 @@ describe("a deadline bounds a required child's wait", () => {
     expect(report.joined.map((j) => j.status)).toEqual([StepStatus.Completed]);
   });
 
+  it("rolls child metrics into step and run totals on deadline termination", async () => {
+    const db = createInMemoryDb();
+    // Child started at 4000, will be force-skipped at now=5000 (deadlineAt=4500).
+    await seed(db, [
+      makeChild({
+        id: "required",
+        createdAt: 4000,
+        startedAt: 4000,
+        status: StepStatus.Running,
+        deadlineAt: 4500,
+        metrics: {
+          claudeMs: 0,
+          activeMs: 0,
+          scheduleWaitMs: 0,
+          externalWaitMs: 0,
+        },
+      }),
+    ]);
+
+    await runJoinTick(deps(db));
+
+    const child = await db.get(Collections.stepInstances, "required");
+    // activeMs = elapsed(startedAt=4000, completedAt=5000) = 1000 (GithubApi type)
+    expect(child?.metrics.activeMs).toBe(1000);
+
+    const run = await db.get(Collections.workflowRuns, "run-1");
+    expect(run?.metrics.totalActiveMs).toBeGreaterThanOrEqual(1000);
+  });
+
   it("does not skip or join before the deadline passes", async () => {
     const db = createInMemoryDb();
     await seed(db, [

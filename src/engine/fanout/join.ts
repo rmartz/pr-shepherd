@@ -115,11 +115,33 @@ async function enforceDeadlines(
       child.deadlineAt <= nowMs &&
       !TERMINAL_CHILD_STATUSES.has(child.status)
     ) {
+      const stepDelta = computeStepMetrics({ ...child, completedAt: nowMs });
+      const nextMetrics: StepInstance["metrics"] = {
+        claudeMs: child.metrics.claudeMs + stepDelta.claudeMs,
+        activeMs: child.metrics.activeMs + stepDelta.activeMs,
+        scheduleWaitMs: child.metrics.scheduleWaitMs + stepDelta.scheduleWaitMs,
+        externalWaitMs: child.metrics.externalWaitMs + stepDelta.externalWaitMs,
+      };
       await db.update(Collections.stepInstances, child.id, {
         status: StepStatus.Skipped,
         completedAt: nowMs,
+        metrics: nextMetrics,
       });
-      result.push({ ...child, status: StepStatus.Skipped, completedAt: nowMs });
+      const run = await db.get(Collections.workflowRuns, child.runId);
+      if (run !== undefined) {
+        await db.increment(
+          Collections.workflowRuns,
+          child.runId,
+          runMetricIncrements(stepDelta),
+          { updatedAt: nowMs },
+        );
+      }
+      result.push({
+        ...child,
+        status: StepStatus.Skipped,
+        completedAt: nowMs,
+        metrics: nextMetrics,
+      });
     } else {
       result.push(child);
     }
