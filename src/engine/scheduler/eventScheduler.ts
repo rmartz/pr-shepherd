@@ -5,6 +5,7 @@ import {
   runExecutionTick,
   type ExecutionDeps,
 } from "@/engine/execution/executionTick";
+import { runJoinTick } from "@/engine/fanout";
 import { monitorHeartbeats, type HeartbeatFailure } from "./heartbeat";
 import { runSchedulerTick, type SchedulerConfig } from "./loop";
 import type { SchedulerTickReport } from "./loop";
@@ -138,6 +139,17 @@ export function startScheduler(
       // thus `inFlight`, which shutdown drains — reflects in-flight step work.
       if (options.execution !== undefined) {
         await runExecutionTick(options.execution);
+        // Fan-in join (#280) runs after execution so it sees children that just
+        // reached a terminal state this tick, resuming any fan-out parent whose
+        // children are all done. Sharing the serialized tick keeps the join
+        // race-free with dispatch and admission.
+        await runJoinTick({
+          db,
+          getGraph: options.execution.getGraph,
+          maxRetries: options.execution.maxRetries,
+          newId: options.execution.newId,
+          now: options.execution.now,
+        });
       }
     } catch (err) {
       options.onTickError?.(err);
