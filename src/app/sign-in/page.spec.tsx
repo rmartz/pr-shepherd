@@ -41,9 +41,12 @@ afterEach(() => {
   mockSignInWithPopup.mockReset();
 });
 
-function withAuth(value: AuthContextValue) {
+function withAuth(value: Pick<AuthContextValue, "user" | "loading">) {
+  // `signOut` is irrelevant to the sign-in page; supply a no-op so each case can
+  // specify only the `user`/`loading` axes it exercises.
+  const full: AuthContextValue = { ...value, signOut: () => Promise.resolve() };
   return (
-    <AuthContext.Provider value={value}>
+    <AuthContext.Provider value={full}>
       <SignInPage />
     </AuthContext.Provider>
   );

@@ -19,8 +19,14 @@ afterEach(() => {
   currentPathname = "/";
 });
 
-function withAuth(children: React.ReactNode, value: AuthContextValue) {
-  return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;
+function withAuth(
+  children: React.ReactNode,
+  value: Pick<AuthContextValue, "user" | "loading">,
+) {
+  // `signOut` is irrelevant to the gate's redirect behavior; supply a no-op so
+  // each case can specify only the `user`/`loading` axes it exercises.
+  const full: AuthContextValue = { ...value, signOut: () => Promise.resolve() };
+  return <AuthContext.Provider value={full}>{children}</AuthContext.Provider>;
 }
 
 describe("AuthGate renders loading state on protected routes while auth resolves", () => {
