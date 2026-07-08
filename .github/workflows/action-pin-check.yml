@@ -1,0 +1,22 @@
+name: Action Pin Check
+
+# Enforce that every third-party GitHub Action is SHA-pinned with a version
+# comment (#325), so the #323 hardening cannot silently regress. Ungated — a
+# workflow-file edit is exactly what this guards, so it must never be skipped.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Enforce SHA-pinned actions
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@9c091bb21b7c1c1d1991bb908d89e4e9dddfe3e0 # v7.0.0
+      # Zero-dependency Node script — no setup/install step needed.
+      - run: node scripts/check-action-pins.mjs
