@@ -11,6 +11,10 @@ describe("formatDurationMs", () => {
     expect(formatDurationMs(1500)).toBe("1.5s");
   });
 
+  it("does not roll over to minutes before the displayed tenths reach 60.0s", () => {
+    expect(formatDurationMs(59_940)).toBe("59.9s");
+  });
+
   it("formats durations at the minute rollover boundary", () => {
     expect(formatDurationMs(59_950)).toBe("1m 0s");
   });
