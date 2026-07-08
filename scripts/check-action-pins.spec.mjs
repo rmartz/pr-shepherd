@@ -18,6 +18,16 @@ describe("findPinViolations flags unpinned third-party actions", () => {
     expect(violations[0].reason).toMatch(/comment/);
   });
 
+  it("flags a SHA pin whose comment is not full major.minor.patch", () => {
+    for (const partial of ["# v7", "# v7.0"]) {
+      const violations = findPinViolations(
+        `      - uses: actions/checkout@${SHA} ${partial}\n`,
+      );
+      expect(violations).toHaveLength(1);
+      expect(violations[0].reason).toMatch(/major\.minor\.patch/);
+    }
+  });
+
   it("flags a reusable workflow pinned by tag", () => {
     const violations = findPinViolations(
       "    uses: owner/repo/.github/workflows/scan.yml@v5.1.0\n",

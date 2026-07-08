@@ -19,6 +19,10 @@ import { readdirSync, readFileSync, statSync } from "node:fs";
 import { join } from "node:path";
 
 const SHA_RE = /^[0-9a-f]{40}$/;
+// The version comment must carry a full `major.minor.patch` (optionally
+// `v`-prefixed). Dependabot is unreliable at bumping SHA pins whose comment is
+// only a partial version (`# v7` / `# v7.0`), so require all three components.
+const SEMVER_RE = /\bv?\d+\.\d+\.\d+\b/;
 
 // Returns [{ line, uses, reason }] for every third-party `uses:` in `text` that
 // is not pinned to a full commit SHA with a version comment. 1-based lines.
@@ -62,12 +66,12 @@ export function findPinViolations(text) {
       });
       continue;
     }
-    if (comment === undefined || !/\d/.test(comment)) {
+    if (comment === undefined || !SEMVER_RE.test(comment)) {
       violations.push({
         line: i + 1,
         uses: value,
         reason:
-          'SHA pin needs a version comment (e.g. "# v1.2.3") so Dependabot can update it',
+          'SHA pin needs a full major.minor.patch version comment (e.g. "# v1.2.3") so Dependabot can update it',
       });
     }
   }
