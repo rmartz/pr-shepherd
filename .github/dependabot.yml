@@ -7,7 +7,10 @@
 #   2. Prettier (and its plugins) — a formatter whose major/minor bumps can
 #      reformat the tree (or fail CI's format check), split into their own PR; a
 #      prettier patch falls through to the dev batch.
-#   3. dev / production catch-alls — minor+patch only, so a NON-family major
+#   3. TypeScript (the compiler) — a major or minor bump can surface new type
+#      errors, so split into its own PR for visibility; a patch falls through to
+#      the dev batch.
+#   4. dev / production catch-alls — minor+patch only, so a NON-family major
 #      matches no group and is raised as an individual PR, isolating the changes
 #      most likely to require code updates for separate review.
 version: 2
