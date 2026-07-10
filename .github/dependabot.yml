@@ -7,8 +7,11 @@
 #   2. Prettier (and its plugins) — a formatter whose major/minor bumps can
 #      reformat the tree (or fail CI's format check), split into their own PR; a
 #      prettier patch falls through to the dev batch.
-#   3. dev / production catch-alls — minor+patch only, so a NON-family major
-#      matches no group and is raised as an individual PR, isolating the changes
+#   3. TypeScript (the compiler) — a major or minor bump can surface new type
+#      errors, so split into its own PR for visibility; a patch falls through to
+#      the dev batch.
+#   4. dev / production catch-alls — minor+patch only, so a major that matches
+#      no earlier group is raised as an individual PR, isolating the changes
 #      most likely to require code updates for separate review.
 version: 2
 updates:
@@ -91,6 +94,17 @@ updates:
       prettier:
         patterns:
           - "prettier*"
+        update-types:
+          - "major"
+          - "minor"
+      # TypeScript is the language/compiler itself — a major or minor bump is a
+      # more significant change than a normal dependency (it can surface new type
+      # errors), so split it into its own PR for visibility. A patch rides the
+      # dev batch. Exact `typescript` — must NOT catch `typescript-eslint`, which
+      # belongs to the `eslint` family group.
+      typescript:
+        patterns:
+          - "typescript"
         update-types:
           - "major"
           - "minor"
