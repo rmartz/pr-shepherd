@@ -14,10 +14,9 @@
 # Pass --sync to also push the updated values to Vercel after writing the YAML.
 # Without --sync, only the local YAML is updated.
 #
-# NOTE: pushing config to Vercel previously ran `sync-env` from the
-# vercel-deploy-scripts npm package, which has been removed. That capability is
-# being consolidated into a standalone `envctl` tool (usage TBD). Until envctl
-# ships, --sync cannot push and exits non-zero; the local YAML edit still works.
+# NOTE: pushing config to Vercel (the old `sync-env`) is being consolidated into
+# a standalone `envctl` tool (usage TBD). Until envctl ships, --sync cannot push
+# and exits non-zero; the local YAML edit still works.
 #
 # Sensitive values must NEVER be passed as KEY=value arguments — they will appear
 # in shell history and ps output. Use `pnpm exec vercel env add` directly for secrets.
@@ -243,10 +242,10 @@ node "$SCRIPT_DIR/validate-config.mjs" --env="$ENV_NAME"
 
 if [[ "$SYNC" == "true" ]]; then
   echo ""
-  echo "error: --sync is not available. Pushing config to Vercel moved out of" >&2
-  echo "       vercel-deploy-scripts into the 'envctl' tool (usage TBD), which" >&2
-  echo "       is not yet wired up. The local YAML was updated; sync manually" >&2
-  echo "       once envctl ships." >&2
+  echo "error: --sync is not available. Pushing config to Vercel is being" >&2
+  echo "       consolidated into the 'envctl' tool (usage TBD), which is not" >&2
+  echo "       yet wired up. The local YAML was updated; sync manually once" >&2
+  echo "       envctl ships." >&2
   exit 1
 fi
 

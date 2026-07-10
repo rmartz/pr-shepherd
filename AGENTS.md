@@ -23,11 +23,10 @@ pnpm build-storybook  # Build static Storybook
 pnpm run env:validate # Validate deployment config files against schema
 ```
 
-Pulling `.env.local`, pushing config to Vercel, and the gitleaks secret scan
-previously came from the `vercel-deploy-scripts` npm package, which has been
-removed. Those capabilities are being consolidated into a standalone `envctl`
-tool (usage TBD). Until it ships, secret scanning is enforced in CI via
-`.github/workflows/secret-scan.yml`.
+Pulling `.env.local`, pushing config to Vercel, and secret rotation are being
+consolidated into a standalone `envctl` tool (usage TBD). Deployment config is
+validated in CI via `.github/workflows/validate-config.yml`, whose schema also
+hard-denies secret-like keys in the public `deployment/*.yml`.
 
 The headless daemon (engine + step executors only — no HTTP surface) is launched via `shepherd start` once Epic 6 (CLI) lands. The UI is a separate Next.js app deployed to Vercel; it reads run state from Firestore via `onSnapshot`. See [ARCHITECTURE.md](ARCHITECTURE.md#deployment-topology) for the split.
 
@@ -43,13 +42,12 @@ Public (non-secret) environment config lives in `deployment/{env}.yml` and is va
 - Validate the config files against the schema: `pnpm run env:validate`
 
 Pushing config to Vercel (the old `--sync` flag / `sync-env`), pulling
-`.env.local`, secret rotation, and the local gitleaks secret scan all came from
-the `vercel-deploy-scripts` npm package, which has been removed. They are being
-consolidated into a standalone `envctl` tool (usage TBD); until it ships the
-`--sync` flag exits non-zero with guidance, and the local pre-commit secret scan
-is paused. The config files themselves (`deployment/{env}.yml`, `schema.yml`)
-remain and will be consumed by `envctl`. Secret scanning stays enforced in CI via
-`.github/workflows/secret-scan.yml`.
+`.env.local`, and secret rotation are being consolidated into a standalone
+`envctl` tool (usage TBD); until it ships the `--sync` flag exits non-zero with
+guidance. The config files themselves (`deployment/{env}.yml`, `schema.yml`)
+remain and will be consumed by `envctl`. Deployment config is validated in CI via
+`.github/workflows/validate-config.yml`, whose schema hard-denies secret-like
+keys in the public `deployment/*.yml`.
 
 ## TypeScript
 
