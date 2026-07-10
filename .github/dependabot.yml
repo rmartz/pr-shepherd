@@ -22,18 +22,21 @@ updates:
       prefix: "chore"
       include: "scope"
     groups:
-      # Version-locked families. Each is a set of packages that ship on a shared
-      # version line (or whose majors are dictated by one member), so a bump to
-      # one that is not matched by a bump to the rest breaks the build. Grouped
-      # across ALL update types — major, minor, AND patch — and listed first to
-      # win group-assignment precedence (a dependency joins the first group it
-      # fully matches), so any bump within a family lands as one atomic PR.
-      # Update-types are deliberately unrestricted: a react patch without
-      # react-dom is as broken as a major, and the prod/dev split would otherwise
-      # scatter react/react-dom from their @types.
+      # Version-locked families — sets of interdependent packages that ship on a
+      # shared version line, so a bump to one not matched by the rest breaks the
+      # build. Listed first to win group-assignment precedence (a dependency
+      # joins the first group it fully matches).
+      #
+      # `react` spans prod (react, react-dom) and dev (@types/*), so the dev/prod
+      # catch-alls would scatter its members — it must group across ALL update
+      # types. The other families live entirely in `dev-dependencies`, whose batch
+      # already moves their minor/patch bumps in lockstep; only a MAJOR (which the
+      # catch-all excludes) would otherwise scatter into standalone per-package
+      # PRs. So those families are scoped to `update-types: [major]` — the one
+      # case they actually need to fix — avoiding an extra PR per minor/patch.
       react:
         # react + react-dom ship the same version and must move together; the
-        # @types track react's major. Spans prod (react, react-dom) and dev (types).
+        # @types track react's major. Crosses prod/dev, so: all update types.
         patterns:
           - "react"
           - "react-dom"
@@ -41,36 +44,45 @@ updates:
           - "@types/react-dom"
       storybook:
         # Every @storybook/* package, the storybook CLI, and the eslint plugin
-        # share one Storybook version line — a Storybook major must move them all.
-        # Listed before `vite` so @storybook/nextjs-vite lands here, not in vite.
+        # share one Storybook version line. All dev, so group majors only; minor/
+        # patch ride the dev batch. Listed before `vite` so @storybook/nextjs-vite
+        # lands here, not in vite.
         patterns:
           - "storybook"
           - "@storybook/*"
           - "eslint-plugin-storybook"
+        update-types:
+          - "major"
       vite:
         # vite + its react plugin + vitest + @vitest/* are one interlocked
-        # toolchain (the @vitejs/plugin-react 6 -> vite 8 coupling), so bump them
-        # together.
+        # toolchain (the @vitejs/plugin-react 6 -> vite 8 coupling). All dev, so
+        # group majors only.
         patterns:
           - "vite"
           - "@vitejs/*"
           - "vitest"
           - "@vitest/*"
+        update-types:
+          - "major"
       eslint:
         # eslint + @eslint/js share a version line; typescript-eslint and the
-        # react-hooks plugin track the eslint major. (eslint-plugin-storybook
-        # matches the `storybook` group above, not this one.)
+        # react-hooks plugin track the eslint major. All dev, so group majors
+        # only. (eslint-plugin-storybook matches the `storybook` group above.)
         patterns:
           - "eslint"
           - "@eslint/js"
           - "typescript-eslint"
           - "eslint-plugin-react-hooks"
+        update-types:
+          - "major"
       tailwind:
-        # tailwindcss core + its postcss plugin ship in lockstep; a mismatch
-        # fails the build. (prettier-plugin-tailwindcss matches `prettier*` below.)
+        # tailwindcss core + its postcss plugin ship in lockstep. All dev, so
+        # group majors only. (prettier-plugin-tailwindcss matches `prettier*`.)
         patterns:
           - "tailwindcss"
           - "@tailwindcss/*"
+        update-types:
+          - "major"
       # Prettier (and its plugins, e.g. prettier-plugin-tailwindcss) drive
       # formatting output, so a major or minor bump can reformat the tree and fail
       # the Format check with no other visible cause. Split those into their own
