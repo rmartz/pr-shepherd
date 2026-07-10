@@ -53,7 +53,7 @@ This project uses [Husky](https://typicode.github.io/husky/) with [lint-staged](
 
 - **ESLint** — Lints and auto-fixes `.ts`, `.tsx`, `.js`, `.mjs`, `.cjs` files
 - **Prettier** — Formats `.ts`, `.tsx`, `.js`, `.mjs`, `.cjs`, `.json`, `.md`, `.yml`, `.yaml` files
-- **Secrets check** — Runs gitleaks and validates `deployment/*.yml` against the schema.
+- **Config check** — Validates `deployment/*.yml` against the schema, which hard-denies secret-like keys.
 
 If a pre-commit hook fails, fix the issues and try committing again.
 
@@ -86,7 +86,7 @@ Every PR runs four parallel checks via GitHub Actions:
 | Format | `pnpm format:check` | Yes                 |
 | Build  | `pnpm build`        | Yes                 |
 
-A separate **Secret Scan** workflow runs gitleaks and validates `deployment/*.yml` on every PR and push to `main`.
+A separate **Validate Config** workflow validates `deployment/*.yml` against the schema on PRs and pushes to `main` that touch deployment config.
 
 ## Storybook
 
