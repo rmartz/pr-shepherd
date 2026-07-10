@@ -94,6 +94,17 @@ updates:
         update-types:
           - "major"
           - "minor"
+      # TypeScript is the language/compiler itself — a major or minor bump is a
+      # more significant change than a normal dependency (it can surface new type
+      # errors), so split it into its own PR for visibility. A patch rides the
+      # dev batch. Exact `typescript` — must NOT catch `typescript-eslint`, which
+      # belongs to the `eslint` family group.
+      typescript:
+        patterns:
+          - "typescript"
+        update-types:
+          - "major"
+          - "minor"
       dev-dependencies:
         dependency-type: development
         update-types:
