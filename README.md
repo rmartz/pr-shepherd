@@ -85,9 +85,7 @@ pnpm test             # Run tests with Vitest
 pnpm tsc              # Type check
 pnpm storybook        # Start Storybook dev server (port 6006)
 pnpm build-storybook  # Build static Storybook
-pnpm run env:pull     # Pull .env.local from Vercel
-pnpm run env:validate # Validate deployment config files against schema
-pnpm run secrets-check # Run config validation + gitleaks scan (also runs on every commit)
+pnpm run env:validate # Validate deployment config files against schema (also runs on every commit)
 ```
 
 ## Configuration
