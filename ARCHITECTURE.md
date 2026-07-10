@@ -285,7 +285,7 @@ Flat config (`eslint.config.js`) with:
 | Format | `pnpm format:check` | Prettier check             |
 | Build  | `pnpm build`        | Next.js production build   |
 
-**Secret Scan** — Runs gitleaks and validates deployment config on every PR and push to `main`.
+**Validate Config** — Validates `deployment/*.yml` against the schema (which hard-denies secret-like keys) on PRs and pushes to `main` that touch deployment config.
 
 **Claude Code** (`issue_comment`, `pull_request_review_comment`, `issues`): Optional — runs Claude Code action when `@claude` is mentioned in issues/PRs. Requires `ANTHROPIC_API_KEY` secret.
 
