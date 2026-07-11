@@ -9,7 +9,7 @@ import {
   ReviewState,
   ThreadState,
   UATState,
-} from "@/engine/derivation/state-vector";
+} from "@/engine/derivation";
 import { Action, decide } from "@/engine/gates";
 import { VerdictLabel, reconcileVerdict } from "@/engine/guards";
 import { GithubActionType, type GithubAction } from "@/steps/githubApi";

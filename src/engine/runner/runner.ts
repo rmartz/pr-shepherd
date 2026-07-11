@@ -1,10 +1,7 @@
 import { Collections } from "@/db/collections";
 import { StepStatus, type StepInstance, type StepType } from "@/db/schemas";
 import type { Db } from "@/db/types";
-import {
-  computeStepMetrics,
-  runMetricIncrements,
-} from "@/engine/metrics/rollup";
+import { computeStepMetrics, runMetricIncrements } from "@/engine/metrics";
 import { createStepExecutorRuntime } from "./runtime";
 import type {
   ExecutorMap,

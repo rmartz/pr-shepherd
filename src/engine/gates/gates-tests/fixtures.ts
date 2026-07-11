@@ -9,7 +9,7 @@ import {
   ThreadState,
   UATState,
   type PrStateVector,
-} from "../../derivation/state-vector";
+} from "../../derivation";
 import { Action } from "../actions";
 import { MergePriority, type Candidate } from "../mergeCandidate";
 

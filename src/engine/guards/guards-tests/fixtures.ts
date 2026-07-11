@@ -1,4 +1,4 @@
-import { Action } from "../../gates/actions";
+import { Action } from "../../gates";
 import type { IdempotencyTarget } from "../idempotency";
 import type { SettleInput } from "../settle-window";
 

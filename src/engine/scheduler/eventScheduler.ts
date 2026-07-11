@@ -1,10 +1,7 @@
 import { Collections } from "@/db/collections";
 import { StepStatus } from "@/db/schemas";
 import type { Db, Unsubscribe } from "@/db/types";
-import {
-  runExecutionTick,
-  type ExecutionDeps,
-} from "@/engine/execution/executionTick";
+import { runExecutionTick, type ExecutionDeps } from "@/engine/execution";
 import { runJoinTick } from "@/engine/fanout";
 import { monitorHeartbeats, type HeartbeatFailure } from "./heartbeat";
 import { runSchedulerTick, type SchedulerConfig } from "./loop";

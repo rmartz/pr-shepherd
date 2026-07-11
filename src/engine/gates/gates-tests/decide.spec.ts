@@ -8,7 +8,7 @@ import {
   ReviewState,
   ThreadState,
   UATState,
-} from "../../derivation/state-vector";
+} from "../../derivation";
 import { Action, Gate, decide } from "../index";
 import { makePrStateVector } from "./fixtures";
 
