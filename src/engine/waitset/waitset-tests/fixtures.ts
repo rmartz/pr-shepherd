@@ -5,7 +5,7 @@ import {
   type StepInstance,
   type WorkflowRun,
 } from "@/db/schemas";
-import type { PrSnapshot } from "@/engine/derivation/types";
+import type { PrSnapshot } from "@/engine/derivation";
 
 // Fixture builders for wait-set / liveness / drain-aggregate tests. Each
 // returns a minimal valid baseline; tests override only the fields under test

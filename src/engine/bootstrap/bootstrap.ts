@@ -4,7 +4,7 @@ import type { Config } from "@/config";
 import type { Db } from "@/db/types";
 import { startCommandListener } from "@/engine/commands";
 import { assembleRunner, type ExecutionDeps } from "@/engine/execution";
-import { recoverFromCrash } from "@/engine/recovery/startup";
+import { recoverFromCrash } from "@/engine/recovery";
 import { startScheduler } from "@/engine/scheduler";
 import { DiscoveryPhase, runSelfDiscoveryPass } from "@/engine/self-discovery";
 import {

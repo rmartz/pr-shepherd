@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { Action } from "../../gates/actions";
+import { Action } from "../../gates";
 import { idempotencyKey, isAlreadyApplied } from "../idempotency";
 import { makeIdempotencyTarget } from "./fixtures";
 

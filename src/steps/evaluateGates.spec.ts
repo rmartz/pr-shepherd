@@ -19,7 +19,7 @@ import {
   ThreadState,
   UATState,
   type PrStateVector,
-} from "@/engine/derivation/state-vector";
+} from "@/engine/derivation";
 import { Action, Gate, decide } from "@/engine/gates";
 import {
   AdmissionRejectReason,

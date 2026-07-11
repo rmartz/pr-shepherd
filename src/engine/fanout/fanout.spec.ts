@@ -9,7 +9,7 @@ import {
   type WorkflowRun,
 } from "@/db/schemas";
 import { createRunner } from "@/engine/runner";
-import { dispatchAndAdvance } from "@/engine/execution/executionTick";
+import { dispatchAndAdvance } from "@/engine/execution";
 import { spawnChildSteps, type FanOutChildSpec } from "./fanout";
 
 // ---------------------------------------------------------------------------

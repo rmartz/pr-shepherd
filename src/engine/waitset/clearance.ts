@@ -1,8 +1,10 @@
-import type { PrSnapshot } from "@/engine/derivation/types";
-import { CopilotState } from "@/engine/derivation/state-vector";
-import { deriveCi } from "@/engine/derivation/ci-axis";
-import { deriveCopilot } from "@/engine/derivation/copilot-axis";
-import { CIState } from "@/engine/derivation/state-vector";
+import type { PrSnapshot } from "@/engine/derivation";
+import {
+  CIState,
+  CopilotState,
+  deriveCi,
+  deriveCopilot,
+} from "@/engine/derivation";
 
 // ---------------------------------------------------------------------------
 // Wait-set clearance predicates (#110, design §6).

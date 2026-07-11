@@ -4,7 +4,7 @@ import {
   Activity,
   DependabotRebaseState,
   type PrStateVector,
-} from "../../derivation/state-vector";
+} from "../../derivation";
 import { Action, type DecideOptions, decide } from "../index";
 import { AXIS_VALUES } from "./fixtures";
 

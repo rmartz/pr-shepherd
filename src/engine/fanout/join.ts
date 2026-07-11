@@ -3,10 +3,7 @@ import { Collections } from "@/db/collections";
 import { StepStatus, type StepInstance } from "@/db/schemas";
 import type { Db } from "@/db/types";
 import { advanceCompletedStep, type AdvanceResult } from "@/engine/advance";
-import {
-  computeStepMetrics,
-  runMetricIncrements,
-} from "@/engine/metrics/rollup";
+import { computeStepMetrics, runMetricIncrements } from "@/engine/metrics";
 
 // ---------------------------------------------------------------------------
 // Fan-in: join a fan-out parent once its children finish (#280).

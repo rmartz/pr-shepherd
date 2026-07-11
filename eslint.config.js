@@ -3,6 +3,7 @@ import globals from "globals";
 import tseslint from "typescript-eslint";
 import reactHooks from "eslint-plugin-react-hooks";
 import storybook from "eslint-plugin-storybook";
+import boundaries from "eslint-plugin-boundaries";
 
 export default tseslint.config(
   {
@@ -96,6 +97,71 @@ export default tseslint.config(
       "max-lines": [
         "error",
         { max: 599, skipBlankLines: false, skipComments: false },
+      ],
+    },
+  },
+  // Vertical public-interface enforcement (eslint-plugin-boundaries).
+  // Each src/engine/<vertical> is a private module: another vertical may import
+  // it only through its barrel index.ts, never a deep internal path. This makes
+  // the barrels load-bearing so coupling stays visible and refactors stay local.
+  //
+  // Only the *entry file* is constrained, not the dependency graph: cross-vertical
+  // imports are allowed, they just have to resolve to the target's index.ts.
+  // Imports within a vertical (same element) are not evaluated, so a vertical's
+  // own files reach each other freely. The policies are last-write-wins — the
+  // disallow blocks importing any engine vertical, then the allow re-permits it
+  // when the resolved file is the barrel.
+  //
+  // Only src/engine/* is classified/enforced here; the other top-level src areas
+  // are intentionally unclassified (so nothing changes for them yet). Extending
+  // this to the UI/daemon areas rides with the UI feature-vertical rebalance
+  // (#345), where the barrel-less ShadCN components/ui and the db/lib barrel work
+  // are decided together.
+  {
+    files: ["src/**/*.{ts,tsx}"],
+    plugins: { boundaries },
+    settings: {
+      "boundaries/elements": [
+        { type: "engine-vertical", pattern: "src/engine/*" },
+      ],
+      "import/resolver": {
+        typescript: { alwaysTryTypes: true, project: "./tsconfig.json" },
+      },
+    },
+    rules: {
+      "boundaries/dependencies": [
+        "error",
+        {
+          default: "allow",
+          policies: [
+            { disallow: { to: { element: { types: "engine-vertical" } } } },
+            {
+              // The barrel is the production public interface.
+              allow: {
+                to: {
+                  element: {
+                    types: "engine-vertical",
+                    fileInternalPath: "index.ts",
+                  },
+                },
+              },
+            },
+            {
+              // A vertical's `<vertical>-tests/` fixtures are its test-support
+              // public interface: a spec in one vertical may reuse another
+              // vertical's shared fixtures (make* builders) without routing them
+              // through the production barrel.
+              allow: {
+                to: {
+                  element: {
+                    types: "engine-vertical",
+                    fileInternalPath: "*-tests/**",
+                  },
+                },
+              },
+            },
+          ],
+        },
       ],
     },
   },

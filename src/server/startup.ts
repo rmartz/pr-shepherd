@@ -5,10 +5,7 @@ import {
   type MigrationsByCollection,
 } from "@/db/migrations";
 import type { Db } from "@/db/types";
-import {
-  recoverFromCrash,
-  type CrashRecoveryReport,
-} from "@/engine/recovery/startup";
+import { recoverFromCrash, type CrashRecoveryReport } from "@/engine/recovery";
 
 export interface StartDaemonOptions {
   // Override the default migrations registry. Tests pass a synthetic

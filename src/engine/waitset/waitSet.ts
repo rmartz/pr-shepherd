@@ -6,7 +6,7 @@ import {
   type WorkflowRun,
 } from "@/db/schemas";
 import type { Db } from "@/db/types";
-import type { PrSnapshot } from "@/engine/derivation/types";
+import type { PrSnapshot } from "@/engine/derivation";
 import { WaitKind, isWaitCleared } from "./clearance";
 
 // ---------------------------------------------------------------------------

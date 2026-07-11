@@ -20,7 +20,7 @@ import {
   ThreadState,
   UATState,
   type PrStateVector,
-} from "../derivation/state-vector";
+} from "../derivation";
 import { Action, Gate, type DecideOptions, type GateDecision } from "./actions";
 
 // A gate is satisfied (returns `undefined`) or blocks with a concrete action.
