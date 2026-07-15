@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { resolve } from "node:path";
 import { parse as parseYaml, YAMLParseError } from "yaml";
-import { z } from "zod";
+import type { z } from "zod";
 import { ConfigSchema, type Config } from "./schema";
 
 // Default path the daemon reads when no explicit path is given. Resolved

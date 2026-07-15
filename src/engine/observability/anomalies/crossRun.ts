@@ -1,4 +1,4 @@
-import { type WorkflowRun } from "@/db";
+import type { WorkflowRun } from "@/db";
 import {
   AnomalyKind,
   DEFAULT_THRESHOLDS,

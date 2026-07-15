@@ -37,16 +37,17 @@ export async function main(argv: readonly string[]): Promise<number> {
 }
 
 // Run only when invoked as the binary, not when imported (e.g. by tests).
+async function run(): Promise<void> {
+  try {
+    process.exitCode = await main(process.argv.slice(2));
+  } catch (error) {
+    process.stderr.write(
+      `${error instanceof Error ? error.message : String(error)}\n`,
+    );
+    process.exitCode = 1;
+  }
+}
+
 if (process.argv[1]?.endsWith("shepherd.ts")) {
-  main(process.argv.slice(2)).then(
-    (code) => {
-      process.exitCode = code;
-    },
-    (error: unknown) => {
-      process.stderr.write(
-        `${error instanceof Error ? error.message : String(error)}\n`,
-      );
-      process.exitCode = 1;
-    },
-  );
+  void run();
 }

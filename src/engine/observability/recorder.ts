@@ -1,5 +1,6 @@
 import { randomUUID } from "node:crypto";
-import { Collections, type Db, type EventRecord, EventType } from "@/db";
+import type { EventType } from "@/db";
+import { Collections, type Db, type EventRecord } from "@/db";
 
 // Fields the caller supplies when recording an event. The recorder fills
 // in the `id` and `createdAt` so callers never hand-roll identity or

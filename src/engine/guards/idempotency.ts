@@ -17,7 +17,7 @@
 // from durable task records). No clock, no I/O.
 // ---------------------------------------------------------------------------
 
-import { Action } from "../gates";
+import type { Action } from "../gates";
 
 // Identifies the PR an action targets. Owner/repo are included so keys are
 // globally unique across repositories the daemon drives concurrently.

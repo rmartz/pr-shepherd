@@ -1,10 +1,10 @@
 import { randomUUID } from "node:crypto";
 import { z } from "zod";
 import { Collections } from "@/db/collections";
+import type { StepType } from "@/db/schemas";
 import {
   RunStatus,
   StepStatus,
-  StepType,
   type StepInstance,
   type WorkflowRun,
 } from "@/db/schemas";

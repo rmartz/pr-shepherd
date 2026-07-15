@@ -3,6 +3,10 @@ import { createInMemoryDb } from "@/db/adapters/inMemory";
 import { Collections } from "@/db/collections";
 import { WebhookEventType } from "@/db/schemas";
 import { computeSignature } from "@/engine/webhook";
+// `typeof DbModule` (below) is a value query, so this needs the value binding
+// and cannot be `import type`.
+// eslint-disable-next-line @typescript-eslint/consistent-type-imports
+import * as DbModule from "@/db";
 
 // The route imports `createDb` from `@/db`, which would construct a real
 // firebase-admin adapter. Replace that factory with the in-memory adapter
@@ -11,7 +15,7 @@ import { computeSignature } from "@/engine/webhook";
 // assert persistence side effects.
 const db = createInMemoryDb();
 vi.mock("@/db", async (importOriginal) => ({
-  ...(await importOriginal<typeof import("@/db")>()),
+  ...(await importOriginal<typeof DbModule>()),
   createDb: () => db,
 }));
 
