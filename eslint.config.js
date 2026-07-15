@@ -55,6 +55,38 @@ export default tseslint.config(
         "error",
         { max: 399, skipBlankLines: false, skipComments: false },
       ],
+      // Statically enforce the code-style conventions that were prose-only.
+      // Type-only imports must be module-level `import type` (auto-fixable).
+      "@typescript-eslint/consistent-type-imports": "error",
+      "@typescript-eslint/no-import-type-side-effects": "error",
+      "no-restricted-syntax": [
+        "error",
+        {
+          selector: "TSImportType",
+          message:
+            'No function-style imports: use a module-level `import type { … } from "…"` statement, not inline `import("…").Type`.',
+        },
+        {
+          selector:
+            "CallExpression > :matches(FunctionExpression, ArrowFunctionExpression).callee",
+          message:
+            "No IIFEs: extract a named helper or compute the value with a plain expression.",
+        },
+        {
+          selector: "CallExpression[callee.property.name='then']",
+          message: "Use async/await, not `.then()` chains.",
+        },
+        {
+          selector:
+            ":matches(CallExpression[callee.name='test'], CallExpression[callee.object.name='test'])",
+          message: "Use `describe`/`it` from Vitest, not `test()`.",
+        },
+        {
+          selector: "CallExpression[callee.property.name='toBeInTheDocument']",
+          message:
+            "Do not use `.toBeInTheDocument()` — use `.toBeDefined()` or check `.textContent`.",
+        },
+      ],
     },
   },
   {

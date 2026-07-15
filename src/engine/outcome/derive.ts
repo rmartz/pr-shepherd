@@ -1,6 +1,6 @@
 import type { IssueCommentSnapshot } from "@/engine/derivation";
 import { parseOutcomeMarker } from "./marker";
-import { type SkillOutcomeRecord } from "./types";
+import type { SkillOutcomeRecord } from "./types";
 
 // ---------------------------------------------------------------------------
 // Outcome derivation signals (Epic 11, #151; extends derivation #96).

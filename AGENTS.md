@@ -51,10 +51,9 @@ keys in the public `deployment/*.yml`.
 
 ## TypeScript
 
-- Strict mode throughout. No `any` types. No `@ts-ignore`.
+- Strict mode throughout. (`no-explicit-any` and `@ts-ignore` are ESLint-enforced — see the enforced-conventions note under Code Conventions.)
 - Do not use `null` unless required for API compatibility or when explicitly distinguishing `null` from `undefined`. Prefer `undefined` for absent/optional values throughout the codebase.
 - Prefer explicit `interface` names scoped to their component (e.g., `interface UserProfileCardProps` not `interface Props`).
-- Use `async/await`, not `.then()` chains.
 
 ## File Organization
 
@@ -72,10 +71,10 @@ keys in the public `deployment/*.yml`.
 
 ## Code Conventions
 
+- **ESLint-enforced — not restated in full (the lint error is the spec; see `eslint.config.js`):** module-level `import type` over inline `import("…").Type`; no IIFEs; `async`/`await` over `.then()` chains; Vitest `describe`/`it` over `test()`; no `.toBeInTheDocument()`; and the `strictTypeChecked` bans on `any` and `@ts-ignore`. Only the judgment conventions ESLint can't check are spelled out below.
 - **Favor type inference.** Explicit generic type arguments (for example, `someFn<Foo>(...)`) are a code smell when TypeScript can infer them.
 - **No spurious variables.** Do not assign a value to a variable only to immediately return it on the next line — return the expression directly instead.
-- **No IIFEs.** Do not use immediately-invoked function expressions. Extract the logic into a named helper function or compute the value with a plain expression instead.
-- **No function-style imports.** Do not use inline `import("…").Type` syntax in type annotations. Use module-level `import type { … } from "…"` statements at the top of the file. Dynamic `await import("…")` for services that require conditional loading (e.g., Sentry instrumentation) is acceptable.
+- **Dynamic imports.** The inline `import("…").Type` _type_ syntax is banned (use `import type`), but a runtime `await import("…")` for conditionally-loaded services (e.g., Sentry instrumentation) is fine — the lint rule targets the type syntax only.
 - **No unnecessary helpers.** Do not extract logic into a helper function unless it separates significant logic or belongs in a different module. Three similar lines is better than a premature abstraction.
 - **Enums and constant objects** should be kept in alphabetical order to minimize merge conflicts.
 - **Value sets: default to a structural string union or `as const` array; reserve `enum` for internal-only sets (or seamed boundaries).** For a fixed set of named values the deciding axis is the **serialization boundary**. If the value crosses a wire/persistence boundary — a Firestore document, a GitHub label, a PR-comment marker, an API/query param — default to a **structural** type: a string union (`type MergeMethod = "merge" | "squash" | "rebase"`), or, when the values are also needed at runtime (validation/iteration), an `as const` array (`const X = [...] as const; type T = (typeof X)[number]`). Both stay structural, so raw/serialized strings assign without a cast and ~no runtime is emitted; a string `enum` is **nominal** (it rejects the underlying literal, forcing a cast at every boundary) and `const enum` is unavailable under `isolatedModules`. Reserve `enum` for **internal-only** state you iterate as a unit and never serialize raw — **or** for a boundary value already paired with an explicit serialization seam that centralizes the conversion (a Zod `z.enum(...)` schema, a `{domain}ToFirestore()` / `firestoreTo{domain}()` converter, or a narrowing type-predicate). Existing enums behind such a seam are deliberate — do not churn them. Keep members and values alphabetical (per the bullet above), and export new value-sets (structural or enum) from the module barrel when the barrel rule applies.
@@ -137,14 +136,12 @@ keys in the public `deployment/*.yml`.
 
 - Test files are co-located with their component: `ComponentName.spec.tsx`.
 - When adding or modifying a UI component, add or update its test to verify rendering behavior and key prop-driven states.
-- Use `@testing-library/react` with `vitest`. Always call `afterEach(cleanup)`.
-- Do not use `.toBeInTheDocument()` — use `.toBeDefined()` or check `.textContent` instead.
+- Use `@testing-library/react` with `vitest`. Always call `afterEach(cleanup)`. (No `.toBeInTheDocument()` — ESLint-enforced; use `.toBeDefined()` or `.textContent`.)
 - Assert against copy constants (e.g., `HOME_PAGE_COPY`) rather than hardcoded strings.
 - Test presentational view components directly; avoid mocking hooks in tests where possible.
 
 ## Testing Conventions
 
-- Use `describe`/`it` from Vitest (not `test`).
 - Test fixture generators use `make{DomainName}()` (e.g., `makeUser()`, `makeSession()`).
 - When splitting large test files, organize into `{module}-tests/` directories.
 

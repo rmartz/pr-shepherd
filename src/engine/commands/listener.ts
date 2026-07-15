@@ -109,6 +109,11 @@ export function startCommandListener(
   };
 
   const onChange = (commands: Command[]): void => {
+    // Serialization queue: append each batch to the tail of the promise chain so
+    // overlapping snapshots process strictly in order. This is deliberate
+    // promise-chaining (a sync handler that must not await), not a lazy `.then()`
+    // an async function could replace.
+    // eslint-disable-next-line no-restricted-syntax -- serialization queue, see above
     queue = queue.then(async () => {
       for (const command of commands) {
         await processCommand(command);
