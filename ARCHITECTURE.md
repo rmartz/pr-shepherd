@@ -287,6 +287,8 @@ Flat config (`eslint.config.js`) with:
 
 **Validate Config** — Validates `deployment/*.yml` against the schema (which hard-denies secret-like keys) on PRs and pushes to `main` that touch deployment config.
 
+**Release Age** — On PRs that change `pnpm-lock.yaml`, fails any newly-introduced package version (including transitive) younger than a cooldown window (default 7 days, matching `dependabot.yml`). A deterministic second layer over Dependabot's own advisory `cooldown`. Fail-open on registry errors; see `scripts/check-release-age.mjs`.
+
 **Claude Code** (`issue_comment`, `pull_request_review_comment`, `issues`): Optional — runs Claude Code action when `@claude` is mentioned in issues/PRs. Requires `ANTHROPIC_API_KEY` secret.
 
 ### Vercel

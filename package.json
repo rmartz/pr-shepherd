@@ -20,7 +20,8 @@
     "storybook": "storybook dev -p 6006",
     "build-storybook": "storybook build",
     "prepare": "husky",
-    "env:validate": "node scripts/validate-config.mjs"
+    "env:validate": "node scripts/validate-config.mjs",
+    "check:release-age": "node scripts/check-release-age.mjs"
   },
   "pnpm": {
     "onlyBuiltDependencies": [
