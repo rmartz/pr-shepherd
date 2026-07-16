@@ -1,5 +1,6 @@
 import { RunStatus, type WorkflowRun } from "@/db/schemas";
 import type { RunListRow } from "@/store";
+import { formatDurationMs } from "@/lib/format";
 import { cn } from "@/lib/utils";
 import { RUN_LIST_COPY } from "./RunListView.copy";
 
@@ -20,16 +21,6 @@ const STATUS_BADGE_CLASS: Record<RunStatus, string> = {
   [RunStatus.Running]:
     "bg-blue-100 text-blue-700 dark:bg-blue-950 dark:text-blue-400",
 };
-
-// Human-readable duration: sub-second in ms, under a minute with one decimal
-// second, otherwise `Nm Ns`.
-function formatDurationMs(ms: number): string {
-  if (ms < 1000) return `${Math.round(ms).toString()}ms`;
-  const seconds = ms / 1000;
-  if (seconds < 60) return `${seconds.toFixed(1)}s`;
-  const minutes = Math.floor(seconds / 60);
-  return `${minutes.toString()}m ${Math.round(seconds % 60).toString()}s`;
-}
 
 // A run's wall-clock span: creation to completion, or to the last update while
 // still in flight.
