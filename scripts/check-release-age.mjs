@@ -31,10 +31,6 @@
 import { execFileSync } from "child_process";
 import { readFileSync } from "fs";
 
-const baseRef = process.argv[2] ?? "origin/main";
-const minDays = Number(process.env.RELEASE_AGE_MIN_DAYS ?? "7");
-const minMs = minDays * 24 * 60 * 60 * 1000;
-
 const SEMVER_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
 
 /**
@@ -43,7 +39,7 @@ const SEMVER_VERSION = /^\d+\.\d+\.\d+(?:[-+][0-9A-Za-z.-]+)?$/;
  * the peer-dependency suffixes that appear in `snapshots:`, so its keys are
  * exactly the `name@version` pairs we want. Returns a Set of "name@version".
  */
-function lockedPackages(lockfileText) {
+export function lockedPackages(lockfileText) {
   const packages = new Set();
   let inPackages = false;
   for (const rawLine of lockfileText.split("\n")) {
@@ -61,7 +57,7 @@ function lockedPackages(lockfileText) {
 }
 
 /** Split a `name@version` key into its name and semver version, else undefined. */
-function parseKey(key) {
+export function parseKey(key) {
   const at = key.lastIndexOf("@");
   if (at <= 0) return undefined;
   const name = key.slice(0, at);
@@ -73,54 +69,77 @@ function parseKey(key) {
 /** Publish timestamp (ms) for name@version, or undefined if unresolvable. */
 async function publishedAt(name, version) {
   const url = `https://registry.npmjs.org/${name.replace("/", "%2F")}`;
-  const res = await fetch(url);
-  if (!res.ok) return undefined;
+  const res = await fetch(url, { signal: AbortSignal.timeout(10_000) });
+  if (!res.ok) {
+    if (res.status !== 404) {
+      console.warn(
+        `  warning: could not check ${name}@${version}: registry returned HTTP ${res.status}`,
+      );
+    }
+    return undefined;
+  }
   const time = (await res.json()).time?.[version];
   return time ? Date.parse(time) : undefined;
 }
 
-const headLock = readFileSync("pnpm-lock.yaml", "utf8");
-const baseLock = execFileSync("git", ["show", `${baseRef}:pnpm-lock.yaml`], {
-  encoding: "utf8",
-});
-
-const basePackages = lockedPackages(baseLock);
-const introduced = [...lockedPackages(headLock)]
-  .filter((key) => !basePackages.has(key))
-  .map(parseKey)
-  .filter((parsed) => parsed !== undefined);
-
-const now = Date.now();
-const violations = [];
-for (const { name, version } of introduced) {
-  let published;
-  try {
-    published = await publishedAt(name, version);
-  } catch (err) {
-    console.warn(
-      `  warning: could not check ${name}@${version}: ${err.message}`,
+async function run() {
+  const baseRef = process.argv[2] ?? "origin/main";
+  const minDays = Number(process.env.RELEASE_AGE_MIN_DAYS ?? "7");
+  if (!Number.isFinite(minDays) || minDays < 0) {
+    console.error(
+      `RELEASE_AGE_MIN_DAYS must be a non-negative number, got: ${JSON.stringify(process.env.RELEASE_AGE_MIN_DAYS)}`,
     );
-    continue;
+    return 1;
   }
-  if (published === undefined) continue; // private / workspace / unpublished
-  const ageDays = (now - published) / (24 * 60 * 60 * 1000);
-  if (now - published < minMs) {
-    violations.push(`  ${name}@${version} — ${ageDays.toFixed(1)} days old`);
+  const minMs = minDays * 24 * 60 * 60 * 1000;
+
+  const headLock = readFileSync("pnpm-lock.yaml", "utf8");
+  const baseLock = execFileSync("git", ["show", `${baseRef}:pnpm-lock.yaml`], {
+    encoding: "utf8",
+  });
+
+  const basePackages = lockedPackages(baseLock);
+  const introduced = [...lockedPackages(headLock)]
+    .filter((key) => !basePackages.has(key))
+    .map(parseKey)
+    .filter((parsed) => parsed !== undefined);
+
+  const now = Date.now();
+  const violations = [];
+  for (const { name, version } of introduced) {
+    let published;
+    try {
+      published = await publishedAt(name, version);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      console.warn(`  warning: could not check ${name}@${version}: ${msg}`);
+      continue;
+    }
+    if (published === undefined) continue; // private / workspace / unpublished
+    const ageDays = (now - published) / (24 * 60 * 60 * 1000);
+    if (now - published < minMs) {
+      violations.push(`  ${name}@${version} — ${ageDays.toFixed(1)} days old`);
+    }
   }
+
+  if (violations.length > 0) {
+    console.error(
+      `pnpm-lock.yaml — ${violations.length} newly-introduced version(s) younger than the ${minDays}-day cooldown:`,
+    );
+    for (const v of violations) console.error(v);
+    console.error(
+      "\nHold the update until the version ages past the cooldown, then re-run this\n" +
+        "check. Malicious releases are typically caught and yanked within days.",
+    );
+    return 1;
+  }
+
+  console.log(
+    `pnpm-lock.yaml — all newly-introduced versions are at least ${minDays} days old. OK`,
+  );
+  return 0;
 }
 
-if (violations.length > 0) {
-  console.error(
-    `pnpm-lock.yaml — ${violations.length} newly-introduced version(s) younger than the ${minDays}-day cooldown:`,
-  );
-  for (const v of violations) console.error(v);
-  console.error(
-    "\nHold the update until the version ages past the cooldown, then re-run this\n" +
-      "check. Malicious releases are typically caught and yanked within days.",
-  );
-  process.exit(1);
+if (process.argv[1]?.endsWith("check-release-age.mjs")) {
+  process.exit(await run());
 }
-
-console.log(
-  `pnpm-lock.yaml — all newly-introduced versions are at least ${minDays} days old. OK`,
-);
