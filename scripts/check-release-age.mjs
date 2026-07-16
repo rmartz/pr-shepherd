@@ -104,22 +104,30 @@ async function run() {
     .map(parseKey)
     .filter((parsed) => parsed !== undefined);
 
+  const CONCURRENCY = 15;
   const now = Date.now();
   const violations = [];
-  for (const { name, version } of introduced) {
-    let published;
-    try {
-      published = await publishedAt(name, version);
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      console.warn(`  warning: could not check ${name}@${version}: ${msg}`);
-      continue;
-    }
-    if (published === undefined) continue; // private / workspace / unpublished
-    const ageDays = (now - published) / (24 * 60 * 60 * 1000);
-    if (now - published < minMs) {
-      violations.push(`  ${name}@${version} — ${ageDays.toFixed(1)} days old`);
-    }
+
+  for (let i = 0; i < introduced.length; i += CONCURRENCY) {
+    const batch = introduced.slice(i, i + CONCURRENCY);
+    const batchViolations = await Promise.all(
+      batch.map(async ({ name, version }) => {
+        let published;
+        try {
+          published = await publishedAt(name, version);
+        } catch (err) {
+          const msg = err instanceof Error ? err.message : String(err);
+          console.warn(`  warning: could not check ${name}@${version}: ${msg}`);
+          return undefined;
+        }
+        if (published === undefined) return undefined; // private / workspace / unpublished
+        const ageDays = (now - published) / (24 * 60 * 60 * 1000);
+        return now - published < minMs
+          ? `  ${name}@${version} — ${ageDays.toFixed(1)} days old`
+          : undefined;
+      }),
+    );
+    violations.push(...batchViolations.filter((v) => v !== undefined));
   }
 
   if (violations.length > 0) {
