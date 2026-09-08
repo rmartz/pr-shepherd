@@ -58,6 +58,7 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Step executors
 
 - [claude_skill](steps/claude-skill.md) — runs a Claude skill in a capability-isolated subprocess.
+- [derive_pr_state](steps/derive-pr-state.md) — fetches the run's PR snapshot, derives the 8-axis state vector, and exposes it at `context.state`.
 - [evaluate_gates](steps/evaluate-gates.md) — reads the derived state vector, runs the gate decision, emits `{ action, blockingGate }` for routing.
 
 ### Workflows
