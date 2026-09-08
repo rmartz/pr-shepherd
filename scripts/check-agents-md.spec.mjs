@@ -20,7 +20,7 @@ describe("wrapperContentError flags a non-bare CLAUDE.md", () => {
     const error = wrapperContentError(
       "# Code Standards\n\n- Always use pnpm.\n",
     );
-    expect(error).toMatch(new RegExp(IMPORT_LINE));
+    expect(error).toContain(IMPORT_LINE);
   });
 
   it("flags the import line plus extra text", () => {
