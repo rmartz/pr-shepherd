@@ -74,5 +74,6 @@ Every page carries a `type` (the only OKF-required key) drawn from this vocabula
 ### Reference
 
 - [Local Development](local-development.md) — running the daemon against the Firebase Emulator.
+- [Open Knowledge Format (OKF)](reference/okf.md) — the docs convention itself: what OKF is, how we apply it, and the authoritative spec.
 - [shepherd CLI](reference/shepherd-cli.md) — the headless daemon's commander entrypoint: start, status, force-retry, inspect.
 - [PM2 ecosystem (optional)](reference/pm2-ecosystem.md) — optional PM2 process file supervising `shepherd start` with auto-restart and exponential backoff.
