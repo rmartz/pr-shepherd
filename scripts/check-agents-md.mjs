@@ -6,7 +6,8 @@
 //   2. Every AGENTS.md has a companion CLAUDE.md in the same directory, and
 //      every CLAUDE.md has a companion AGENTS.md in the same directory.
 //   3. Every CLAUDE.md is a bare wrapper whose only content is the Claude Code
-//      import line `@AGENTS.md` — no directives, no other text, no symlink.
+//      import line `@AGENTS.md` — a real file (not a directory or symlink), with
+//      no directives and no other text.
 //
 //   check-agents-md.mjs        # walk the tree, pair the files, report violations
 //
@@ -122,10 +123,17 @@ function main() {
     if (hasClaude) {
       const claudePath = join(dir, "CLAUDE.md");
       const relClaude = join(rel, "CLAUDE.md");
-      if (lstatSync(claudePath).isSymbolicLink()) {
+      const stat = lstatSync(claudePath);
+      if (stat.isSymbolicLink()) {
         report(
           relClaude,
           "CLAUDE.md is a symlink; it must be a real file containing only `@AGENTS.md`",
+        );
+        failed = true;
+      } else if (!stat.isFile()) {
+        report(
+          relClaude,
+          "CLAUDE.md is not a regular file (e.g. a directory); it must be a real file containing only `@AGENTS.md`",
         );
         failed = true;
       } else {

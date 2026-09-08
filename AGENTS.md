@@ -111,8 +111,9 @@ keys in the public `deployment/*.yml`.
 - **Every `AGENTS.md` has a companion `CLAUDE.md`** in the same directory, and every `CLAUDE.md`
   has a companion `AGENTS.md`. The two files are always paired.
 - **Every `CLAUDE.md` is a bare wrapper** whose only content is the Claude Code import line
-  `@AGENTS.md` — no directives, no other text, no symlinks. This feeds the `AGENTS.md` directives
-  to Claude Code while keeping them authored once, so the two files can never drift.
+  `@AGENTS.md` — a real file (not a directory or symlink), with no directives and no other text.
+  This feeds the `AGENTS.md` directives to Claude Code while keeping them authored once, so the
+  two files can never drift.
 - Enforced in CI by the **Agent Directive Files** workflow (`scripts/check-agents-md.mjs`); run it
   locally with `node scripts/check-agents-md.mjs`.
 
