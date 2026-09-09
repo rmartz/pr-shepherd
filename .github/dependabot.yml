@@ -19,15 +19,17 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    # NO cooldown on npm — deliberately omitted, do not re-add. Dependabot passes
-    # a `cooldown` to pnpm as `minimumReleaseAge` during lockfile regeneration.
-    # When any transitive dep in a fast-moving toolchain has a version published
-    # inside the window, pnpm hard-fails (ERR_PNPM_NO_MATURE_MATCHING_VERSION)
-    # rather than falling back to an older mature version, so the whole grouped
-    # update fails and the PR auto-closes as "no longer updatable". A freshness
-    # policy cannot coexist with Dependabot always resolving to latest. See #374
-    # (and rmartz/hidden-role-game#852). The github-actions cooldown below is
-    # kept — those runs regenerate no lockfile and succeed.
+    # NO cooldown anywhere — deliberately omitted, do not re-add (not on npm, not
+    # on github-actions). Dependabot passes a `cooldown` to pnpm as
+    # `minimumReleaseAge` during lockfile regeneration. When any transitive dep in
+    # a fast-moving toolchain has a version published inside the window, pnpm
+    # hard-fails (ERR_PNPM_NO_MATURE_MATCHING_VERSION) rather than falling back to
+    # an older mature version, so the whole grouped update fails and the PR
+    # auto-closes as "no longer updatable". A freshness policy cannot coexist with
+    # Dependabot always resolving to latest: Dependabot keeps its PRs current, so
+    # even a bump pinned to an older release still pulls in transitive deps that
+    # are too new — the exact threat a cooldown was meant to avoid. It adds
+    # friction without meeting the goal. See #374 (and rmartz/hidden-role-game#852).
     commit-message:
       prefix: "chore"
       include: "scope"
@@ -134,8 +136,6 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    cooldown:
-      default-days: 7
     commit-message:
       prefix: "chore"
       include: "scope"
