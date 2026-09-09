@@ -1,0 +1,25 @@
+name: Agent Directive Files
+
+# Enforce the AGENTS.md / CLAUDE.md pairing convention: directives live once in
+# AGENTS.md, every AGENTS.md is paired with a companion CLAUDE.md, and every
+# CLAUDE.md is a bare `@AGENTS.md` import (no directives, no symlinks). The
+# checker walks the whole tree, so any add / edit / rename / delete of a
+# directive file changes its result — run it ungated on every PR rather than
+# path-gating, so an orphaned or drifted file can never slip through unchecked.
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    name: Enforce AGENTS.md/CLAUDE.md pairing
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      # Zero-dependency Node script — no setup/install step needed.
+      - run: node scripts/check-agents-md.mjs
