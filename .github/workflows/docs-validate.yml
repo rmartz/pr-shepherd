@@ -1,0 +1,36 @@
+name: Validate Docs
+
+# Gated to docs inputs: both validators read only files under docs/** plus their
+# own scripts, so the result is a pure function of that bounded set. A path
+# allowlist is therefore safe here (unlike the test/build suite, whose failure
+# domain is unbounded). check-docs-okf.mjs parses YAML frontmatter (needs a dep
+# install), so this runs the setup step rather than bare node. If a validator is
+# extended to read inputs outside docs/**, widen the paths below to match.
+on:
+  pull_request:
+    paths:
+      - "docs/**"
+      - "scripts/check-docs-okf.mjs"
+      - "scripts/check-docs-index.mjs"
+  push:
+    branches: [main]
+    paths:
+      - "docs/**"
+      - "scripts/check-docs-okf.mjs"
+      - "scripts/check-docs-index.mjs"
+
+permissions:
+  contents: read
+
+jobs:
+  validate-docs:
+    name: Validate docs OKF frontmatter and index reachability
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: ./.github/actions/setup
+      # Every docs page must carry OKF frontmatter with an allowed `type`…
+      - run: node scripts/check-docs-okf.mjs
+      # …and be reachable from docs/index.md by navigating index-to-index links.
+      - run: node scripts/check-docs-index.mjs
