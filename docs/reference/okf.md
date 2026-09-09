@@ -27,8 +27,8 @@ instead of one monolithic document, and the `type` vocabulary lets the graph be 
 
 ## How pr-shepherd applies OKF
 
-- **One concept per file.** Each page documents a single subsystem, step executor, adapter, workflow,
-  design, or reference topic.
+- **One concept per file.** Each page documents a single concept — such as a subsystem, step
+  executor, adapter, workflow, design, reference topic, index, or log.
 - **Frontmatter.** Every page begins with a `---` … `---` YAML block. The only OKF-required key is
   `type`, constrained here to a fixed vocabulary (`Subsystem`, `StepExecutor`, `Adapter`, `Workflow`,
   `Design`, `Reference`, `Index`, `Log`) so the graph is navigable by category. `title`, `description`,
@@ -39,8 +39,8 @@ instead of one monolithic document, and the `type` vocabulary lets the graph be 
 
 ## How it is enforced
 
-Two zero-review CI checks keep the tree conformant (both gated to `docs/**` in the **Validate Docs**
-workflow):
+Two zero-review CI checks keep the tree conformant (both gated to `docs/**` and the two validator
+scripts in the **Validate Docs** workflow):
 
 - [`scripts/check-docs-okf.mjs`](../../scripts/check-docs-okf.mjs) — every page has frontmatter with a
   `type` drawn from the allowed vocabulary.
