@@ -29,12 +29,15 @@ instead of one monolithic document, and the `type` vocabulary lets the graph be 
 
 - **One concept per file.** Each page documents a single concept — such as a subsystem, step
   executor, adapter, workflow, design, reference topic, index, or log.
-- **Frontmatter.** Every page begins with a `---` … `---` YAML block. The only OKF-required key is
-  `type`, constrained here to a fixed vocabulary (`Subsystem`, `StepExecutor`, `Adapter`, `Workflow`,
-  `Design`, `Reference`, `Index`, `Log`) so the graph is navigable by category. `title`, `description`,
-  `resource`, and `tags` are recommended but optional. The vocabulary table lives in
+- **Frontmatter.** Every _content_ page begins with a `---` … `---` YAML block. The only OKF-required
+  key is `type`, constrained here to a fixed vocabulary (`Subsystem`, `StepExecutor`, `Adapter`,
+  `Workflow`, `Design`, `Reference`, `Log`) so the graph is navigable by category. `title`,
+  `description`, `resource`, and `tags` are recommended but optional. The vocabulary table lives in
   [`docs/index.md`](../index.md).
-- **A navigable graph.** [`docs/index.md`](../index.md) is the root `Index` page; every page is
+- **Reserved `index.md` files.** Per OKF §8 (and §11), an `index.md` carries **no frontmatter** — with
+  one exception, a bundle-root `index.md` MAY carry only `okf_version`. An index file is therefore
+  exempt from the `type` rule; the checker rejects any other frontmatter key on it.
+- **A navigable graph.** [`docs/index.md`](../index.md) is the root index page; every page is
   reachable from it by following Markdown links, and pages cross-link related concepts directly.
 
 ## How it is enforced

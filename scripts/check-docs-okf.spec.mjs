@@ -44,4 +44,31 @@ describe("validatePage enforces OKF frontmatter with an allowed type", () => {
   it("keeps the type vocabulary alphabetized", () => {
     expect(ALLOWED_TYPES).toEqual([...ALLOWED_TYPES].sort());
   });
+
+  it("drops the dead `Index` type — index files carry no type (OKF §8)", () => {
+    expect(ALLOWED_TYPES).not.toContain("Index");
+  });
+});
+
+describe("validatePage exempts the reserved index.md from the type rule (OKF §8/§11)", () => {
+  it("accepts an index file with no frontmatter at all", () => {
+    expect(validatePage("docs/index.md", "# Docs\n")).toEqual([]);
+  });
+
+  it("accepts an index file carrying only okf_version", () => {
+    const content = '---\nokf_version: "0.2"\n---\n\n# Docs\n';
+    expect(validatePage("docs/index.md", content)).toEqual([]);
+  });
+
+  it("accepts a nested subdirectory index.md, not just the root", () => {
+    const content = '---\nokf_version: "0.2"\n---\n';
+    expect(validatePage("docs/subsystems/index.md", content)).toEqual([]);
+  });
+
+  it("flags an index file carrying frontmatter beyond okf_version", () => {
+    const content = "---\ntype: Index\ntitle: Docs\n---\n";
+    const errors = validatePage("docs/index.md", content);
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("okf_version");
+  });
 });

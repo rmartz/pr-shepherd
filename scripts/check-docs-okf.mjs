@@ -12,20 +12,25 @@
 // Spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
 
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { parse } from "yaml";
 
-// The canonical `type` vocabulary for pr-shepherd docs (alphabetical).
+// The canonical `type` vocabulary for pr-shepherd docs (alphabetical). Reserved
+// `index.md` files carry no `type` (see validatePage) — they are exempt from
+// this vocabulary per OKF §8, so `Index` is intentionally absent.
 export const ALLOWED_TYPES = [
   "Adapter", // a src/db data adapter
   "Design", // a design / goal-state document
-  "Index", // the OKF directory listing (docs/index.md)
   "Log", // the OKF dated change history (docs/log.md)
   "Reference", // general reference (local-development, topology, …)
   "StepExecutor", // a src/steps/* executor
   "Subsystem", // an src/engine/* module
   "Workflow", // a workflows/*.yaml definition
 ];
+
+// OKF §8: an index file carries no frontmatter, with one exception — a
+// bundle-root `index.md` MAY carry an `okf_version` key.
+const INDEX_ALLOWED_KEYS = ["okf_version"];
 
 // Extract and parse a page's leading `---\n…\n---` YAML frontmatter block.
 // Returns the parsed object, or undefined when no frontmatter is present.
@@ -39,6 +44,22 @@ export function parseFrontmatter(content) {
 // Returns a list of human-readable problems for one page (empty = valid).
 export function validatePage(path, content) {
   const frontmatter = parseFrontmatter(content);
+
+  // Reserved `index.md` files (OKF §8/§11) are exempt from the `type` rule:
+  // they carry no frontmatter, except an optional bundle-root `okf_version`.
+  if (basename(path) === "index.md") {
+    if (frontmatter === undefined) return [];
+    const disallowed = Object.keys(frontmatter).filter(
+      (key) => !INDEX_ALLOWED_KEYS.includes(key),
+    );
+    if (disallowed.length > 0) {
+      return [
+        `${path}: index files carry no frontmatter beyond \`okf_version\` (found: ${disallowed.join(", ")})`,
+      ];
+    }
+    return [];
+  }
+
   if (frontmatter === undefined) {
     return [`${path}: missing OKF frontmatter (a leading --- … --- block)`];
   }
