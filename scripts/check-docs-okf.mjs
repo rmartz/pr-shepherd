@@ -28,8 +28,8 @@ export const ALLOWED_TYPES = [
   "Workflow", // a workflows/*.yaml definition
 ];
 
-// OKF §8: an index file carries no frontmatter, with one exception — a
-// bundle-root `index.md` MAY carry an `okf_version` key.
+// OKF §8: an index file carries no frontmatter, with one exception — any
+// `index.md` MAY carry an `okf_version` key.
 const INDEX_ALLOWED_KEYS = ["okf_version"];
 
 // Extract and parse a page's leading `---\n…\n---` YAML frontmatter block.
@@ -48,7 +48,7 @@ export function validatePage(path, content) {
   const frontmatter = parseFrontmatter(content);
 
   // Reserved `index.md` files (OKF §8/§11) are exempt from the `type` rule:
-  // they carry no frontmatter, except an optional bundle-root `okf_version`.
+  // they carry no frontmatter, except an optional `okf_version`.
   if (basename(path) === "index.md") {
     if (frontmatter === undefined) return [];
     if (frontmatter === null) {
