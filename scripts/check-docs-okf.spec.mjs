@@ -17,6 +17,14 @@ describe("parseFrontmatter extracts a page's YAML frontmatter", () => {
   it("returns undefined when there is no frontmatter", () => {
     expect(parseFrontmatter("# Foo\n\nNo frontmatter here.\n")).toBeUndefined();
   });
+
+  it("returns null when a frontmatter block is present but parses to a non-object (empty block)", () => {
+    expect(parseFrontmatter("---\n\n---\n\n# Foo\n")).toBeNull();
+  });
+
+  it("returns null when a frontmatter block is present but parses to a non-object (scalar)", () => {
+    expect(parseFrontmatter("---\nhello\n---\n\n# Foo\n")).toBeNull();
+  });
 });
 
 describe("validatePage enforces OKF frontmatter with an allowed type", () => {
@@ -70,5 +78,15 @@ describe("validatePage exempts the reserved index.md from the type rule (OKF §8
     const errors = validatePage("docs/index.md", content);
     expect(errors).toHaveLength(1);
     expect(errors[0]).toContain("okf_version");
+  });
+
+  it("flags an index file with an empty frontmatter block", () => {
+    const errors = validatePage("docs/index.md", "---\n\n---\n\n# Docs\n");
+    expect(errors).toHaveLength(1);
+  });
+
+  it("flags an index file with a scalar frontmatter block", () => {
+    const errors = validatePage("docs/index.md", "---\nhello\n---\n\n# Docs\n");
+    expect(errors).toHaveLength(1);
   });
 });

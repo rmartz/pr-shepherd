@@ -33,12 +33,14 @@ export const ALLOWED_TYPES = [
 const INDEX_ALLOWED_KEYS = ["okf_version"];
 
 // Extract and parse a page's leading `---\n…\n---` YAML frontmatter block.
-// Returns the parsed object, or undefined when no frontmatter is present.
+// Returns the parsed object when a valid object block is present, null when a
+// block is present but parses to a non-object (empty or scalar), or undefined
+// when no frontmatter delimiter is found at all.
 export function parseFrontmatter(content) {
   const match = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(content);
   if (match === null) return undefined;
   const parsed = parse(match[1]);
-  return parsed !== null && typeof parsed === "object" ? parsed : undefined;
+  return parsed !== null && typeof parsed === "object" ? parsed : null;
 }
 
 // Returns a list of human-readable problems for one page (empty = valid).
@@ -49,6 +51,11 @@ export function validatePage(path, content) {
   // they carry no frontmatter, except an optional bundle-root `okf_version`.
   if (basename(path) === "index.md") {
     if (frontmatter === undefined) return [];
+    if (frontmatter === null) {
+      return [
+        `${path}: index files carry no frontmatter beyond \`okf_version\` (found: empty or non-object block)`,
+      ];
+    }
     const disallowed = Object.keys(frontmatter).filter(
       (key) => !INDEX_ALLOWED_KEYS.includes(key),
     );
@@ -60,7 +67,7 @@ export function validatePage(path, content) {
     return [];
   }
 
-  if (frontmatter === undefined) {
+  if (frontmatter === undefined || frontmatter === null) {
     return [`${path}: missing OKF frontmatter (a leading --- … --- block)`];
   }
   const { type } = frontmatter;
