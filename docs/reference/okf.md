@@ -35,8 +35,9 @@ instead of one monolithic document, and the `type` vocabulary lets the graph be 
   `description`, `resource`, and `tags` are recommended but optional. The vocabulary table lives in
   [`docs/index.md`](../index.md).
 - **Reserved `index.md` files.** Per OKF §8 (and §11), an `index.md` carries **no frontmatter** — with
-  one exception, a bundle-root `index.md` MAY carry only `okf_version`. An index file is therefore
-  exempt from the `type` rule; the checker rejects any other frontmatter key on it.
+  one exception, any `index.md` MAY carry only `okf_version` (since any may serve as a sub-bundle
+  root). An index file is therefore exempt from the `type` rule; the checker rejects any other
+  frontmatter key on it.
 - **A navigable graph.** [`docs/index.md`](../index.md) is the root index page; every page is
   reachable from it by following Markdown links, and pages cross-link related concepts directly.
 
