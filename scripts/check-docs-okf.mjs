@@ -12,14 +12,15 @@
 // Spec: https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md
 
 import { readdirSync, readFileSync } from "node:fs";
-import { join } from "node:path";
+import { basename, join } from "node:path";
 import { parse } from "yaml";
 
-// The canonical `type` vocabulary for pr-shepherd docs (alphabetical).
+// The canonical `type` vocabulary for pr-shepherd docs (alphabetical). Reserved
+// `index.md` files carry no `type` (see validatePage) — they are exempt from
+// this vocabulary per OKF §8, so `Index` is intentionally absent.
 export const ALLOWED_TYPES = [
   "Adapter", // a src/db data adapter
   "Design", // a design / goal-state document
-  "Index", // the OKF directory listing (docs/index.md)
   "Log", // the OKF dated change history (docs/log.md)
   "Reference", // general reference (local-development, topology, …)
   "StepExecutor", // a src/steps/* executor
@@ -27,19 +28,50 @@ export const ALLOWED_TYPES = [
   "Workflow", // a workflows/*.yaml definition
 ];
 
+// OKF §8: an index file carries no frontmatter, with one exception — any
+// `index.md` MAY carry an `okf_version` key.
+const INDEX_ALLOWED_KEYS = ["okf_version"];
+
 // Extract and parse a page's leading `---\n…\n---` YAML frontmatter block.
-// Returns the parsed object, or undefined when no frontmatter is present.
+// Returns the parsed object when a valid object block is present, null when a
+// block is present but parses to a non-object (empty or scalar), or undefined
+// when no frontmatter delimiter is found at all.
 export function parseFrontmatter(content) {
   const match = /^---\n([\s\S]*?)\n---(?:\n|$)/.exec(content);
   if (match === null) return undefined;
   const parsed = parse(match[1]);
-  return parsed !== null && typeof parsed === "object" ? parsed : undefined;
+  return parsed !== null && typeof parsed === "object" ? parsed : null;
 }
 
 // Returns a list of human-readable problems for one page (empty = valid).
 export function validatePage(path, content) {
   const frontmatter = parseFrontmatter(content);
-  if (frontmatter === undefined) {
+
+  // Reserved `index.md` files (OKF §8/§11) are exempt from the `type` rule:
+  // they carry no frontmatter, except an optional `okf_version`.
+  if (basename(path) === "index.md") {
+    if (frontmatter === undefined) return [];
+    if (frontmatter === null) {
+      return [
+        `${path}: index files carry no frontmatter beyond \`okf_version\` (found: empty or non-object block)`,
+      ];
+    }
+    const keys = Object.keys(frontmatter);
+    if (keys.length === 0) {
+      return [
+        `${path}: index files carry no frontmatter beyond \`okf_version\` (found: empty mapping)`,
+      ];
+    }
+    const disallowed = keys.filter((key) => !INDEX_ALLOWED_KEYS.includes(key));
+    if (disallowed.length > 0) {
+      return [
+        `${path}: index files carry no frontmatter beyond \`okf_version\` (found: ${disallowed.join(", ")})`,
+      ];
+    }
+    return [];
+  }
+
+  if (frontmatter === undefined || frontmatter === null) {
     return [`${path}: missing OKF frontmatter (a leading --- … --- block)`];
   }
   const { type } = frontmatter;

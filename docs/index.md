@@ -1,7 +1,5 @@
 ---
-type: Index
-title: PR Shepherd docs
-description: OKF knowledge graph — curated reference pages an agent retrieves before a task.
+okf_version: "0.2"
 ---
 
 # PR Shepherd documentation
@@ -10,17 +8,17 @@ These pages follow Google's [Open Knowledge Format (OKF)](https://github.com/Goo
 
 ## Frontmatter
 
-Every page carries a `type` (the only OKF-required key) drawn from this vocabulary; `title`, `description`, `resource`, and `tags` are recommended-but-optional. `scripts/check-docs-okf.mjs` validates conformance.
+Every **content** page carries a `type` (the only OKF-required key) drawn from this vocabulary; `title`, `description`, `resource`, and `tags` are recommended-but-optional. A reserved `index.md` (like this file) is the exception: per OKF §8 it carries no frontmatter beyond an optional bundle-root `okf_version`, and is exempt from the `type` rule. `scripts/check-docs-okf.mjs` validates conformance.
 
-| `type`          | Documents                                  |
-| --------------- | ------------------------------------------ |
-| `Subsystem`     | an `src/engine/*` module                   |
-| `StepExecutor`  | a `src/steps/*` step executor              |
-| `Adapter`       | an `src/db` data adapter                   |
-| `Workflow`      | a `workflows/*.yaml` definition            |
-| `Design`        | a design / goal-state document             |
-| `Reference`     | general reference (setup, topology, …)     |
-| `Index` / `Log` | the OKF directory listing / change history |
+| `type`         | Documents                              |
+| -------------- | -------------------------------------- |
+| `Subsystem`    | an `src/engine/*` module               |
+| `StepExecutor` | a `src/steps/*` step executor          |
+| `Adapter`      | an `src/db` data adapter               |
+| `Workflow`     | a `workflows/*.yaml` definition        |
+| `Design`       | a design / goal-state document         |
+| `Reference`    | general reference (setup, topology, …) |
+| `Log`          | the OKF dated change history           |
 
 ## Pages
 
