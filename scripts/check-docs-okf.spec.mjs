@@ -89,4 +89,15 @@ describe("validatePage exempts the reserved index.md from the type rule (OKF §8
     const errors = validatePage("docs/index.md", "---\nhello\n---\n\n# Docs\n");
     expect(errors).toHaveLength(1);
   });
+
+  it("flags an index file with an explicit empty-mapping frontmatter block ({})", () => {
+    const errors = validatePage("docs/index.md", "---\n{}\n---\n\n# Docs\n");
+    expect(errors).toHaveLength(1);
+    expect(errors[0]).toContain("empty mapping");
+  });
+
+  it("flags an index file with a YAML sequence frontmatter block", () => {
+    const errors = validatePage("docs/index.md", "---\n- foo\n---\n\n# Docs\n");
+    expect(errors).toHaveLength(1);
+  });
 });

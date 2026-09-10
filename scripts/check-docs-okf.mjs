@@ -56,9 +56,13 @@ export function validatePage(path, content) {
         `${path}: index files carry no frontmatter beyond \`okf_version\` (found: empty or non-object block)`,
       ];
     }
-    const disallowed = Object.keys(frontmatter).filter(
-      (key) => !INDEX_ALLOWED_KEYS.includes(key),
-    );
+    const keys = Object.keys(frontmatter);
+    if (keys.length === 0) {
+      return [
+        `${path}: index files carry no frontmatter beyond \`okf_version\` (found: empty mapping)`,
+      ];
+    }
+    const disallowed = keys.filter((key) => !INDEX_ALLOWED_KEYS.includes(key));
     if (disallowed.length > 0) {
       return [
         `${path}: index files carry no frontmatter beyond \`okf_version\` (found: ${disallowed.join(", ")})`,
