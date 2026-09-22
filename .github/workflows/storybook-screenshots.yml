@@ -1,0 +1,51 @@
+name: Storybook Screenshots
+
+# Advisory per-PR screenshot gallery (issue #202), delegated to the shared
+# rmartz/storybook-ci reusable workflow. It builds Storybook, screenshots the
+# stories a PR's changes touch, and posts them as one update-in-place PR comment.
+#
+# Why the shared workflow settles #202's make-or-break integration step: our
+# screenshots are machine-consumed — `/review` and `/merge` scan PR comments for
+# image URLs and assess them as a visual check, and that scan matches only
+# `github.com/user-attachments/...` and `user-images.githubusercontent.com/...`.
+# storybook-ci uploads via `gh --attach`, which hosts images as GitHub
+# user-attachments, so the posted galleries are already in a scheme those skills
+# recognize. No widening of the screenshot-URL recognition is needed, and there
+# is no per-PR orphan image branch to clean up (so no `contents: write` grant and
+# no cleanup workflow).
+#
+# The advisory isolation (`continue-on-error`), per-PR concurrency, fork-skip,
+# capture deadline, and change gating all live in the shared workflow, so no
+# `concurrency` or `continue-on-error` block belongs here.
+#
+# `secrets: inherit` forwards STORYBOOK_SCREENSHOT_PAT, required because the
+# user-attachments upload endpoint rejects the Actions GITHUB_TOKEN. Until that
+# secret is configured, the shared workflow's preflight step posts one
+# non-blocking advisory PR comment and skips the build and capture, so a missing
+# PAT announces itself instead of looking like success. The whole job is skipped
+# on fork PRs so the PAT never reaches fork-authored code.
+#
+# This is advisory and never a required check, so unlike storybook-tests.yml it
+# may safely use an `on.paths` filter to stay off unrelated PRs. The filter is
+# `src/**` rather than only `*.stories.*` because the shared default resolver is
+# `colocation`: a component edited without touching its story still regenerates
+# the co-located story's screenshot. That is deliberately broader than #256's
+# stated screenshot trigger (story/test changes only) — see docs/storybook-ci.md,
+# which records the divergence rather than resolving #256 against its own
+# rationale.
+
+on:
+  pull_request:
+    branches: ["main"]
+    paths:
+      - "src/**"
+      - ".storybook/**"
+
+permissions:
+  contents: read
+  pull-requests: write
+
+jobs:
+  screenshots:
+    uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@731dada2cdeb712b5443c4e2b29a3065f90ffd81 # v1.2.1
+    secrets: inherit
