@@ -16,7 +16,7 @@ pnpm dev              # Start dev server (UI only, no engine)
 pnpm build            # Production build
 pnpm lint             # Lint
 pnpm format           # Format
-pnpm test             # Run tests with Vitest
+pnpm test             # Run tests with Vitest (all 5 projects, incl. browser stories)
 pnpm tsc              # Type check
 pnpm storybook        # Start Storybook dev server (port 6006)
 pnpm build-storybook  # Build static Storybook
@@ -28,11 +28,20 @@ consolidated into a standalone `envctl` tool (usage TBD). Deployment config is
 validated in CI via `.github/workflows/validate-config.yml`, whose schema also
 hard-denies secret-like keys in the public `deployment/*.yml`.
 
+`pnpm test` runs all five Vitest projects, and the fifth — `storybook` — renders
+stories in headless Chromium, so it needs a Playwright browser binary once per
+machine: `pnpm exec playwright install chromium`. To run only the fast headless
+suites (what CI's `Tests` job does), enumerate them:
+`pnpm exec vitest run --project node --project hooks --project components --project tooling`.
+The browser suite and the gating `build-storybook` compile run in CI via the
+shared `rmartz/storybook-ci` reusable workflows — see
+[docs/reference/storybook-ci.md](docs/reference/storybook-ci.md).
+
 The headless daemon (engine + step executors only — no HTTP surface) is launched via `shepherd start` once Epic 6 (CLI) lands. The UI is a separate Next.js app deployed to Vercel; it reads run state from Firestore via `onSnapshot`. See [ARCHITECTURE.md](ARCHITECTURE.md#deployment-topology) for the split.
 
 ## Worktree Setup
 
-After creating a git worktree (`git worktree add .git-worktrees/`), run `pnpm install --frozen-lockfile` inside it before invoking any build, test, or lint commands. pnpm's `node-modules` linker creates per-directory `node_modules` trees; a fresh worktree has none. The global store is already populated so this step only creates hardlinks — it takes a few seconds and requires no network access.
+After creating a git worktree (`git worktree add .git-worktrees/`), run `pnpm install --frozen-lockfile` inside it before invoking any build, test, or lint commands. pnpm's `node-modules` linker creates per-directory `node_modules` trees; a fresh worktree has none. The global store is already populated so this step only creates hardlinks — it takes a few seconds and requires no network access. Playwright browser binaries live in a shared per-user cache (`~/Library/Caches/ms-playwright`), so the `storybook` Vitest project needs no per-worktree browser install.
 
 ## Deployment Config
 

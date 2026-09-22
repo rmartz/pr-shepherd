@@ -76,7 +76,11 @@ jobs:
     steps:
       - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
       - uses: ./.github/actions/setup
-      - run: pnpm test
+      # Headless suites only (node / hooks / components / tooling) — no browser,
+      # so this job stays fast and skips the Playwright install. The
+      # browser-based `storybook` project runs separately in storybook-tests.yml
+      # (issue #255), which owns the Chromium provisioning and caching.
+      - run: pnpm exec vitest run --project node --project hooks --project components --project tooling
 
   lint:
     name: Lint
