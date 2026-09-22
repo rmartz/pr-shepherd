@@ -76,6 +76,18 @@ No `with:` block is needed in either caller: the shared defaults
 (`pnpm exec vitest run --project storybook`, `pnpm build-storybook`) already match this repo's
 project name and package script.
 
+## Recorded decision: no production-bundle render gate
+
+[#255](https://github.com/rmartz/pr-shepherd/issues/255) asks for an explicit decision on adding a
+`@storybook/test-runner --url` gate that renders every story against the _served_ static build.
+
+**Decision: do not add it.** The coverage we have is the browser story suite (the addon-vitest
+transform/mount render path) plus the gating `build-storybook` _compile_ check. The residual gap is
+narrow — "compiles, passes Vitest, throws only in the production-bundle render" — and closing it
+costs a third full browser render pass on every PR. That is the proportionality trade-off the fleet
+guidance explicitly names as a legitimate choice. Revisit only if a production-bundle-only render
+break actually appears.
+
 ## Required checks
 
 A reusable workflow's check context is `<caller job> / <called job>`, **not** the bare job name. To
