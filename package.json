@@ -11,6 +11,7 @@
   "scripts": {
     "dev": "next dev",
     "build": "next build",
+    "dispatch": "tsx src/dispatcher/cli.ts",
     "start": "next start",
     "test": "vitest",
     "tsc": "tsc --noEmit",
