@@ -25,11 +25,13 @@ export interface AttemptRecord {
   lastFinishedAt: number;
 }
 
-export type SkipReason = "cooldown" | "running" | "stalled" | "no-slot";
+export type SkipReason =
+  "cooldown" | "no-slot" | "repo-busy" | "running" | "stalled";
 
 export interface SelectionInput {
   candidates: readonly DispatchCandidate[];
-  running: ReadonlySet<string>;
+  // Running jobs, keyed by PR key.
+  running: ReadonlyMap<string, DispatchCandidate>;
   history: ReadonlyMap<string, AttemptRecord>;
   now: number;
   slots: number;
@@ -78,14 +80,30 @@ function blockingReason(
   return undefined;
 }
 
+// Lock key for a `serialPerRepo` rule: one job per (repo, rule) at a time.
+function serialLock(candidate: DispatchCandidate): string | undefined {
+  return candidate.rule.serialPerRepo
+    ? `${candidate.repo} ${candidate.rule.name}`
+    : undefined;
+}
+
 export function selectJobs(input: SelectionInput): Selection {
   const selection: Selection = { jobs: [], skipped: [] };
+  const heldLocks = new Set(
+    [...input.running.values()].map(serialLock).filter((lock) => lock),
+  );
   for (const candidate of input.candidates) {
+    const lock = serialLock(candidate);
     const reason =
       blockingReason(candidate, input) ??
+      (lock && heldLocks.has(lock) ? "repo-busy" : undefined) ??
       (selection.jobs.length >= input.slots ? "no-slot" : undefined);
-    if (reason) selection.skipped.push({ candidate, reason });
-    else selection.jobs.push(candidate);
+    if (reason) {
+      selection.skipped.push({ candidate, reason });
+    } else {
+      selection.jobs.push(candidate);
+      if (lock) heldLocks.add(lock);
+    }
   }
   return selection;
 }

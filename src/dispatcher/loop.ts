@@ -64,7 +64,10 @@ export async function runDispatcher(
   options: DispatcherOptions,
   deps: DispatcherDeps,
 ): Promise<void> {
-  const running = new Map<string, Promise<void>>();
+  const running = new Map<
+    string,
+    { candidate: DispatchCandidate; job: Promise<void> }
+  >();
   const history = new Map<string, AttemptRecord>();
   // Log each missing checkout / stalled PR once, not every cycle.
   const warned = new Set<string>();
@@ -112,7 +115,7 @@ export async function runDispatcher(
         running.delete(candidate.key);
       }
     };
-    running.set(candidate.key, runJob());
+    running.set(candidate.key, { candidate, job: runJob() });
   };
 
   while (!deps.stop.aborted) {
@@ -137,7 +140,9 @@ export async function runDispatcher(
 
     const { jobs, skipped } = selectJobs({
       candidates: dispatchable,
-      running: new Set(running.keys()),
+      running: new Map(
+        [...running].map(([key, { candidate }]) => [key, candidate]),
+      ),
       history,
       now: deps.now(),
       // A dry run lists everything dispatchable, not just one batch.
@@ -171,7 +176,7 @@ export async function runDispatcher(
       sleep(options.intervalMs, undefined, { signal: deps.stop }).catch(
         () => undefined,
       ),
-      ...running.values(),
+      ...[...running.values()].map(({ job }) => job),
     ]);
     // Floor between polls so a burst of fast-failing jobs can't spin the
     // search API.
@@ -182,6 +187,6 @@ export async function runDispatcher(
 
   if (running.size > 0) {
     deps.log(`waiting for ${String(running.size)} running job(s) to finish…`);
-    await Promise.all(running.values());
+    await Promise.all([...running.values()].map(({ job }) => job));
   }
 }

@@ -17,6 +17,7 @@ const MERGE_RULE: DispatchRule = {
   name: "approved",
   skill: "/merge",
   filter: 'label:"approved"',
+  serialPerRepo: true,
 };
 
 function makeHit(overrides: Partial<PrSearchHit> = {}): PrSearchHit {
@@ -41,7 +42,7 @@ function makeCandidate(
 function makeInput(overrides: Partial<SelectionInput>): SelectionInput {
   return {
     candidates: [],
-    running: new Set(),
+    running: new Map(),
     history: new Map(),
     now: 1_000_000,
     slots: 5,
@@ -73,15 +74,54 @@ describe("selectJobs", () => {
   it("skips a PR that already has a running job", () => {
     const candidate = makeCandidate();
     const { skipped } = selectJobs(
-      makeInput({ candidates: [candidate], running: new Set([candidate.key]) }),
+      makeInput({
+        candidates: [candidate],
+        running: new Map([[candidate.key, candidate]]),
+      }),
     );
     expect(skipped.map((s) => s.reason)).toEqual(["running"]);
   });
 
   it("caps new jobs at the free slot count", () => {
-    const candidates = [1, 2, 3].map((number) => makeCandidate({ number }));
+    const candidates = [1, 2, 3].map((number) =>
+      makeCandidate({ number }, FIX_RULE),
+    );
     const { jobs } = selectJobs(makeInput({ candidates, slots: 2 }));
     expect(jobs.map((j) => j.number)).toEqual([1, 2]);
+  });
+
+  it("selects one serial-rule job per repo per cycle", () => {
+    const candidates = [1, 2].map((number) => makeCandidate({ number }));
+    const { jobs } = selectJobs(makeInput({ candidates }));
+    expect(jobs.map((j) => j.number)).toEqual([1]);
+  });
+
+  it("holds a serial-rule job while another runs in the same repo", () => {
+    const runningMerge = makeCandidate({ number: 1 });
+    const candidate = makeCandidate({ number: 2 });
+    const { skipped } = selectJobs(
+      makeInput({
+        candidates: [candidate],
+        running: new Map([[runningMerge.key, runningMerge]]),
+      }),
+    );
+    expect(skipped.map((s) => s.reason)).toEqual(["repo-busy"]);
+  });
+
+  it("runs serial-rule jobs in different repos concurrently", () => {
+    const candidates = ["rmartz/a", "rmartz/b"].map((repo) =>
+      makeCandidate({ repo }),
+    );
+    const { jobs } = selectJobs(makeInput({ candidates }));
+    expect(jobs).toHaveLength(2);
+  });
+
+  it("does not serialize non-serial rules within a repo", () => {
+    const candidates = [1, 2].map((number) =>
+      makeCandidate({ number }, FIX_RULE),
+    );
+    const { jobs } = selectJobs(makeInput({ candidates }));
+    expect(jobs).toHaveLength(2);
   });
 
   it("holds a same-skill, same-head retry inside the cooldown", () => {

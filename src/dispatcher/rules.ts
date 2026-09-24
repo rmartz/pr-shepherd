@@ -16,6 +16,9 @@ export interface DispatchRule {
   skill: DispatchSkill;
   // Label qualifiers appended to the shared base query.
   filter: string;
+  // Run at most one job for this rule per repo at a time (e.g. merges land
+  // one by one, so each re-validates against the previous merge).
+  serialPerRepo?: boolean;
 }
 
 export const DISPATCH_RULES: readonly DispatchRule[] = [
@@ -47,6 +50,7 @@ export const DISPATCH_RULES: readonly DispatchRule[] = [
     skill: "/merge",
     filter:
       'label:"approved" -label:"blocked" -label:"do not merge" -label:"escalation needed"',
+    serialPerRepo: true,
   },
 ];
 

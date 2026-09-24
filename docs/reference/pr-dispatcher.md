@@ -29,6 +29,7 @@ Rules live in `src/dispatcher/rules.ts`. To change routing, edit that file (or l
 Each job runs `claude -p [--claude-arg …] -- "/<skill> <number>"` with its cwd set to `<repos-root>/<repo-name>`, which is the root checkout the dotfiles skills expect. A repo with no local checkout is skipped, and the skip is logged once. Each job's output goes to its own file in `--log-dir`.
 
 - **Concurrency:** at most `--concurrency` jobs run at once, with at most one job per PR.
+- **Serial merges:** the `approved` rule is `serialPerRepo`. Only one `/merge` runs per repo at a time, so each merge re-validates against the one before it. Merges in different repos still run in parallel.
 - **Timeout:** a job is SIGTERMed after `--timeout` minutes.
 - **Stall guard:** labels move asynchronously, so a PR can still carry its trigger label right after a skill finishes. Two guards are keyed on `(skill, headSha)`:
   - A `--cooldown` delays each re-dispatch.
