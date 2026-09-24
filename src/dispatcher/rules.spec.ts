@@ -23,6 +23,13 @@ describe("buildSearchQuery", () => {
 });
 
 describe("DISPATCH_RULES", () => {
+  it("routes fix required ahead of review and merge", () => {
+    const names = DISPATCH_RULES.map((rule) => rule.name);
+    expect(names.indexOf("fix-required")).toBeLessThan(
+      names.indexOf("review-requested"),
+    );
+  });
+
   it("routes merge conflicts ahead of merging", () => {
     const names = DISPATCH_RULES.map((rule) => rule.name);
     expect(names.indexOf("merge-conflict")).toBeLessThan(

@@ -25,6 +25,12 @@ export const DISPATCH_RULES: readonly DispatchRule[] = [
     filter: 'label:"merge conflict" -label:"escalation needed"',
   },
   {
+    // pr-lifecycle's static-problem label (conflict and/or failing CI).
+    name: "fix-required",
+    skill: "/fix-review",
+    filter: 'label:"fix required" -label:"blocked" -label:"escalation needed"',
+  },
+  {
     name: "changes-requested",
     skill: "/fix-review",
     filter:

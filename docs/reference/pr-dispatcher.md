@@ -17,6 +17,7 @@ Each rule is a global GitHub search (`is:pr involves:@me state:open archived:fal
 | Rule                | Label filter                                                     | Skill         |
 | ------------------- | ---------------------------------------------------------------- | ------------- |
 | `merge-conflict`    | `merge conflict`, not `escalation needed`                        | `/fix-review` |
+| `fix-required`      | `fix required`, not `blocked` / `escalation needed`              | `/fix-review` |
 | `changes-requested` | `changes requested`, not `blocked` / `escalation needed`         | `/fix-review` |
 | `review-requested`  | `review requested`, not `blocked` / `escalation needed`          | `/review`     |
 | `approved`          | `approved`, not `blocked` / `do not merge` / `escalation needed` | `/merge`      |
