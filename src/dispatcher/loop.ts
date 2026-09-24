@@ -48,15 +48,18 @@ async function findCandidates(
   options: DispatcherOptions,
   deps: DispatcherDeps,
 ): Promise<DispatchCandidate[]> {
-  const results = await Promise.all(
-    options.rules.map(async (rule) => ({
+  // Sequential on purpose: concurrent GraphQL searches trip GitHub's
+  // secondary rate limit even with primary quota to spare.
+  const results = [];
+  for (const rule of options.rules) {
+    results.push({
       rule,
       hits: await searchPullRequests(
         deps.gh,
         buildSearchQuery(rule, options.owner),
       ),
-    })),
-  );
+    });
+  }
   return assignRules(results);
 }
 
