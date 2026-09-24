@@ -14,12 +14,12 @@ tags: [cli, dispatcher, coordinator, labels]
 
 Each rule is a global GitHub search (`is:pr involves:@me state:open archived:false draft:false`, narrowed to `user:<owner>`), listed in priority order. A PR matching several searches is dispatched only for the first rule that matches.
 
-| Rule                | Label filter                                                               | Skill         |
-| ------------------- | -------------------------------------------------------------------------- | ------------- |
-| `merge-conflict`    | `merge conflict`, not `escalation needed`                                  | `/fix-review` |
-| `changes-requested` | `changes requested`, not `blocked` / `escalation needed`                   | `/fix-review` |
-| `review-requested`  | `review requested`, not `blocked` / `escalation needed`                    | `/review`     |
-| `approved`          | `approved`, not `blocked` / `do not merge` / `escalation needed`           | `/merge`      |
+| Rule                | Label filter                                                     | Skill         |
+| ------------------- | ---------------------------------------------------------------- | ------------- |
+| `merge-conflict`    | `merge conflict`, not `escalation needed`                        | `/fix-review` |
+| `changes-requested` | `changes requested`, not `blocked` / `escalation needed`         | `/fix-review` |
+| `review-requested`  | `review requested`, not `blocked` / `escalation needed`          | `/review`     |
+| `approved`          | `approved`, not `blocked` / `do not merge` / `escalation needed` | `/merge`      |
 
 Rules live in `src/dispatcher/rules.ts`. To change routing, edit that file (or let pr-lifecycle change the labels). Do not add state inspection to the dispatcher.
 
