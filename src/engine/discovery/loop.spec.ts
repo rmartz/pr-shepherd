@@ -53,9 +53,9 @@ function makeTransport(prs: DiscoveredPr[]): PrReadTransport {
 }
 
 // A no-op enrollment handler for the interval-only test, where the discovered
-// set is irrelevant. Reading the argument keeps it from being a bare empty fn.
-function ignoreSweep(_sweep: DiscoverySweep): void {
-  void _sweep;
+// set is irrelevant. A zero-arg function is assignable to the one-arg handler.
+function ignoreSweep(): void {
+  // Intentionally ignores the swept PR set.
 }
 
 // A promise that never settles. Tests inject this as the `sleep` return after
