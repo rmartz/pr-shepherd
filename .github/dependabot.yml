@@ -19,8 +19,12 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    # NO cooldown anywhere — deliberately omitted, do not re-add (not on npm, not
-    # on github-actions). Dependabot passes a `cooldown` to pnpm as
+    # No explicit `cooldown` on npm — deliberately omitted, do not add one. (Since
+    # 2026-07-14 Dependabot applies a 3-day default cooldown even with no block
+    # declared; the github-actions entry below declares one only to exempt
+    # first-party `rmartz/*` actions and reusable workflows, which are published
+    # from our own repos with provenance, while third-party actions keep the
+    # default wait.) Dependabot passes a `cooldown` to pnpm as
     # `minimumReleaseAge` during lockfile regeneration. When any transitive dep in
     # a fast-moving toolchain has a version published inside the window, pnpm
     # hard-fails (ERR_PNPM_NO_MATURE_MATCHING_VERSION) rather than falling back to
@@ -136,6 +140,11 @@ updates:
     directory: /
     schedule:
       interval: weekly
+    cooldown:
+      # Explicit, so declaring the block can't change the third-party default.
+      default-days: 3
+      exclude:
+        - "rmartz/*"
     commit-message:
       prefix: "chore"
       include: "scope"
