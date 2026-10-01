@@ -1,4 +1,5 @@
 import * as Sentry from "@sentry/nextjs";
+import { sentryDataCollection } from "./sentry.data-collection";
 
 const enableSensitiveData =
   process.env.NODE_ENV === "development" &&
@@ -9,7 +10,7 @@ Sentry.init({
 
   // Sends IP addresses, cookies, and request headers. Off by default; opt in via
   // SENTRY_ENABLE_SENSITIVE_DATA=true (development only).
-  sendDefaultPii: enableSensitiveData,
+  dataCollection: sentryDataCollection(enableSensitiveData),
   tracesSampleRate: process.env.NODE_ENV === "development" ? 1.0 : 0.1,
 
   // Attach local variable values to stack frames (development + opt-in only)
