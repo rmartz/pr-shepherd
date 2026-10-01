@@ -48,5 +48,5 @@ permissions:
 
 jobs:
   screenshots:
-    uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@faecde6e0a01ecab8f4235421314e0f0afda1797 # v1.5.1
+    uses: rmartz/storybook-ci/.github/workflows/storybook-screenshots.yml@ff758949491f6d22298273b424dd79144c5dd543 # v1.5.2
     secrets: inherit
