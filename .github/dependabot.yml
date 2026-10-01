@@ -148,3 +148,13 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
+    # Every action bump, majors included, lands in one PR; a major that breaks CI
+    # is split out into its own fix PR rather than holding the rest of the group
+    # back. This repo has no auto-merge yet, so every group is merged by hand.
+    # Whoever adds auto-merge (bot-automerge, or pr-policy/pr-lifecycle) must
+    # refuse `version-update:semver-major` — fetch-metadata reports a group's
+    # highest update-type — so a group containing a major stays held for review.
+    groups:
+      github-actions:
+        patterns:
+          - "*"
