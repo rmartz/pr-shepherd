@@ -73,7 +73,7 @@ Use imperative verbs: **Add**, **Implement**, **Fix**, **Update**, **Extract**, 
 
 No `feat:`/`fix:` conventional commit prefixes inside a feature branch — those are reserved for the squash-merge commit on the PR.
 
-PR titles must follow Conventional Commits format (`feat: …`, `fix: …`, `chore: …`). This is enforced by CI.
+PR titles must follow Conventional Commits format (`feat: …`, `fix: …`, `chore: …`). This is enforced by the `title` check inside the `pr-policy` check (see [docs/reference/pr-policy.md](docs/reference/pr-policy.md)).
 
 ## CI Checks
 
