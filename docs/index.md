@@ -76,4 +76,5 @@ Every **content** page carries a `type` (the only OKF-required key) drawn from t
 - [PR Dispatcher (interim coordinator)](reference/pr-dispatcher.md) — `pnpm dispatch`: polls global label searches and dispatches /review, /fix-review, or /merge into each repo's local checkout, with no routing logic of its own.
 - [shepherd CLI](reference/shepherd-cli.md) — the headless daemon's commander entrypoint: start, status, force-retry, inspect.
 - [Storybook CI (shared rmartz/storybook-ci)](reference/storybook-ci.md) — the two thin callers delegating gating Storybook tests and the advisory screenshot gallery to the shared reusable workflows, the Vitest browser project they depend on, and the PAT they need.
+- [pr-policy (shared rmartz/pr-policy-action)](reference/pr-policy.md) — the `pull_request_target` caller that posts the `pr-policy` verdict; as a Next.js app this repo keeps the UAT gate (a PR waits for `no UAT needed` or `UAT passed`).
 - [PM2 ecosystem (optional)](reference/pm2-ecosystem.md) — optional PM2 process file supervising `shepherd start` with auto-restart and exponential backoff.
