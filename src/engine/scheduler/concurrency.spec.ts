@@ -249,6 +249,10 @@ describe("Defensive guards", () => {
     // guard must throw rather than silently treating the step as
     // zero-cost.
     const candidate = {
+      // The unsafe assertion is the point of this test: it forges a value
+      // outside the enum to exercise the runtime exhaustiveness guard, so
+      // there is no sound typed alternative.
+      // eslint-disable-next-line @typescript-eslint/no-unsafe-enum-assignment
       stepType: "telepathy" as StepType,
       repoId: "owner/repo-a",
     };
