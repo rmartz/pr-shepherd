@@ -26,8 +26,10 @@ export enum VerdictLabel {
   ReviewRequested = "review requested",
 }
 
-// Every verdict label as a set, for fast membership tests against a PR's labels.
-const VERDICT_LABELS: ReadonlySet<VerdictLabel> = new Set(
+// Every verdict label's string value as a set, for fast membership tests against
+// a PR's labels. Keyed by `string` (not `VerdictLabel`) so an arbitrary label can
+// be looked up without first asserting it into the enum type.
+const VERDICT_LABEL_VALUES: ReadonlySet<string> = new Set(
   Object.values(VerdictLabel),
 );
 
@@ -35,7 +37,7 @@ const VERDICT_LABELS: ReadonlySet<VerdictLabel> = new Set(
 // type predicate so the filtered list is typed as `VerdictLabel[]` and every
 // downstream comparison is enum-to-enum (never string-vs-enum).
 function isVerdictLabel(label: string): label is VerdictLabel {
-  return VERDICT_LABELS.has(label as VerdictLabel);
+  return VERDICT_LABEL_VALUES.has(label);
 }
 
 // The label mutation a `github_api` step applies atomically: labels to add and

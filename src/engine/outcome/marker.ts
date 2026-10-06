@@ -112,9 +112,13 @@ function stringField(value: unknown): string | undefined {
   return typeof value === "string" && value.length > 0 ? value : undefined;
 }
 
+// Each `SkillOutcome` keyed by its string value, so a parsed string resolves to
+// the real enum member by lookup rather than by asserting it into the enum type.
+const OUTCOME_BY_VALUE: ReadonlyMap<string, SkillOutcome> = new Map(
+  Object.values(SkillOutcome).map((outcome) => [outcome, outcome]),
+);
+
 function toOutcome(value: unknown): SkillOutcome | undefined {
   if (typeof value !== "string") return undefined;
-  return (Object.values(SkillOutcome) as string[]).includes(value)
-    ? (value as SkillOutcome)
-    : undefined;
+  return OUTCOME_BY_VALUE.get(value);
 }
