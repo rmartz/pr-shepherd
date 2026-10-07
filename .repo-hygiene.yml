@@ -6,7 +6,7 @@ checks:
   okf:
     types: [Adapter, Design, Log, Reference, StepExecutor, Subsystem, Workflow]
     roots: [docs]
-    resourceExemptTypes: '*' # a `resource` is recommended, not required
+    resourceExemptTypes: "*" # a `resource` is recommended, not required
   # One root docs/index.md links every page directly, so subdirectories carry no
   # index of their own.
   okf-index:
