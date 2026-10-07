@@ -43,13 +43,14 @@ instead of one monolithic document, and the `type` vocabulary lets the graph be 
 
 ## How it is enforced
 
-Two zero-review CI checks keep the tree conformant (both gated to `docs/**` and the two validator
-scripts in the **Validate Docs** workflow):
+Two [`@rmartz/repo-hygiene`](https://github.com/rmartz/repo-hygiene) checks keep the tree
+conformant. Both run on every PR in the **Repo Hygiene** workflow and are configured in
+`.repo-hygiene.yml`:
 
-- [`scripts/check-docs-okf.mjs`](../../scripts/check-docs-okf.mjs) — every page has frontmatter with a
-  `type` drawn from the allowed vocabulary.
-- [`scripts/check-docs-index.mjs`](../../scripts/check-docs-index.mjs) — every page is reachable from
-  [`docs/index.md`](../index.md) by navigating index-to-index links, so nothing is orphaned from the graph.
+- `okf` — every page has frontmatter with a `type` drawn from the allowed vocabulary, plus a
+  `title` and `description`.
+- `okf-index` — every page is reachable from [`docs/index.md`](../index.md), so nothing is
+  orphaned from the graph.
 
 When you add a page, give it valid frontmatter and link it from an `index.md` (today, the root
 [`docs/index.md`](../index.md)); the checks above fail the build otherwise.

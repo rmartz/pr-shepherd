@@ -18,7 +18,7 @@ name: Storybook Tests
 # already match this repo's `storybook` Vitest project and its package script.
 #
 # The `@<sha>` pin is kept current by Dependabot's github-actions ecosystem, and
-# `scripts/check-action-pins.mjs` enforces that it stays a full SHA with a
+# the `action-pins` repo-hygiene check enforces that it stays a full SHA with a
 # `# vX.Y.Z` comment.
 #
 # Required-check note (#256): gating is the reusable workflow's `detect-changes`

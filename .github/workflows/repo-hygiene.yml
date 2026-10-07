@@ -1,0 +1,35 @@
+name: Repo Hygiene
+
+# Runs @rmartz/repo-hygiene through the same composite-Action caller every other
+# rmartz repo uses, so the whole set reports as one `hygiene` check that the
+# default-branch ruleset requires. A check added to this list (or a new default
+# shipped in an Action release) is gated with no ruleset edit.
+#
+# Replaces the bespoke Action Pin Check, Agent Directive Files, Validate Docs and
+# Package Version Check workflows and their scripts/check-*.mjs validators. The
+# checks are cheap and tree-based, so they run on every PR — never behind a
+# `paths:` filter, which would hang a required check that never reports.
+#
+# The `@<sha>` pin is kept current by Dependabot's github-actions ecosystem, which
+# also carries the CLI version (pinned inside the Action).
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+  statuses: write # post one `repo-hygiene / <check>` status per check
+  actions: write # report an inconclusive run as cancelled, not failed
+
+jobs:
+  hygiene:
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@3d3c42e5aac5ba805825da76410c181273ba90b1 # v7.0.1
+      - uses: rmartz/repo-hygiene-action@d7cd3ba50e4057242e8ebb1285c1ceaae441f152 # v5.0.0
+        with:
+          checks: conflict-markers action-pins package-pins docs-links md-pairing okf okf-index file-caps
+          config: .repo-hygiene.yml

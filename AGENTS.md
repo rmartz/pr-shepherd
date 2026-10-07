@@ -110,7 +110,7 @@ keys in the public `deployment/*.yml`.
 
 - Keep documentation in sync with the code — outdated docs are worse than no docs.
 - **`docs/` follows the [Open Knowledge Format (OKF)](https://github.com/GoogleCloudPlatform/knowledge-catalog/blob/main/okf/SPEC.md)**: one concept per markdown file with YAML frontmatter, cross-linked into a graph and listed in [docs/index.md](docs/index.md). These are pull/retrieval reference pages — **not** a place for always-in-context policy (that stays in this file / `CLAUDE.md`) or the top-level overview (`ARCHITECTURE.md`).
-  - Every `docs/` **content** page must start with frontmatter carrying a `type` from the vocabulary in [docs/index.md](docs/index.md) (`Subsystem`, `StepExecutor`, `Adapter`, `Workflow`, `Design`, `Reference`, `Log`); `title`, `description`, `resource`, and `tags` are recommended. A reserved `index.md` is exempt (OKF §8): it carries no frontmatter beyond an optional `okf_version` (any `index.md` may serve as a sub-bundle root and MAY include it). `scripts/check-docs-okf.mjs` validates this.
+  - Every `docs/` **content** page must start with frontmatter carrying a `type` from the vocabulary in [docs/index.md](docs/index.md) (`Subsystem`, `StepExecutor`, `Adapter`, `Workflow`, `Design`, `Reference`, `Log`), plus a `title` and `description`; `resource` and `tags` are recommended. A reserved `index.md` is exempt (OKF §8): it carries no frontmatter beyond an optional `okf_version` (any `index.md` may serve as a sub-bundle root and MAY include it). The `okf` and `okf-index` checks in the **Repo Hygiene** workflow validate this.
   - When you add a new subsystem, step executor, adapter, or workflow, add a corresponding `docs/` page and link it from `docs/index.md`.
 
 ## Agent Directive Files
@@ -123,8 +123,7 @@ keys in the public `deployment/*.yml`.
   `@AGENTS.md` — a real file (not a directory or symlink), with no directives and no other text.
   This feeds the `AGENTS.md` directives to Claude Code while keeping them authored once, so the
   two files can never drift.
-- Enforced in CI by the **Agent Directive Files** workflow (`scripts/check-agents-md.mjs`); run it
-  locally with `node scripts/check-agents-md.mjs`.
+- Enforced in CI by the `md-pairing` check in the **Repo Hygiene** workflow.
 
 ## React / Next.js Standards
 
