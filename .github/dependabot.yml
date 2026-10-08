@@ -4,12 +4,11 @@
 #      across ALL update types (major + minor + patch) so a bump to one always
 #      moves the rest in the same PR. A react major without react-dom, or one
 #      @storybook/* without the others, is an inherently broken update.
-#   2. Prettier (and its plugins) — a formatter whose major/minor bumps can
-#      reformat the tree (or fail CI's format check), split into their own PR; a
-#      prettier patch falls through to the dev batch.
-#   3. TypeScript (the compiler) — a major or minor bump can surface new type
-#      errors, so split into its own PR for visibility; a patch falls through to
-#      the dev batch.
+#   2. Prettier (and its plugins) — a formatter whose bumps can reformat the
+#      tree (or fail CI's format check), so every prettier bump (major, minor,
+#      and patch) is split into its own PR.
+#   3. TypeScript (the compiler) — a bump can surface new type errors, so every
+#      typescript bump is split into its own PR for visibility.
 #   4. dev / production catch-alls — minor+patch only, so a major that matches
 #      no earlier group is raised as an individual PR, isolating the changes
 #      most likely to require code updates for separate review.
@@ -100,27 +99,20 @@ updates:
         update-types:
           - "major"
       # Prettier (and its plugins, e.g. prettier-plugin-tailwindcss) drive
-      # formatting output, so a major or minor bump can reformat the tree and fail
-      # the Format check with no other visible cause. Split those into their own
-      # PR. Patch bumps are excluded here, so a trivial Prettier patch falls
-      # through to `dev-dependencies` and rides along with the normal batch.
+      # formatting output, so a bump can reformat the tree and fail the Format
+      # check with no other visible cause. No update-types filter: every Prettier
+      # bump (major, minor, and patch) lands in this one isolated group.
       prettier:
         patterns:
           - "prettier*"
-        update-types:
-          - "major"
-          - "minor"
-      # TypeScript is the language/compiler itself — a major or minor bump is a
-      # more significant change than a normal dependency (it can surface new type
-      # errors), so split it into its own PR for visibility. A patch rides the
-      # dev batch. Exact `typescript` — must NOT catch `typescript-eslint`, which
-      # belongs to the `eslint` family group.
+      # TypeScript is the language/compiler itself — a bump is a more significant
+      # change than a normal dependency (it can surface new type errors), so every
+      # typescript bump (no update-types filter) lands in its own PR for
+      # visibility. Exact `typescript` — must NOT catch `typescript-eslint`,
+      # which belongs to the `eslint` family group.
       typescript:
         patterns:
           - "typescript"
-        update-types:
-          - "major"
-          - "minor"
       dev-dependencies:
         dependency-type: development
         update-types:
@@ -148,13 +140,13 @@ updates:
     commit-message:
       prefix: "chore"
       include: "scope"
-    # Every action bump, majors included, lands in one PR; a major that breaks CI
-    # is split out into its own fix PR rather than holding the rest of the group
-    # back. This repo has no auto-merge yet, so every group is merged by hand.
-    # Whoever adds auto-merge (bot-automerge, or pr-policy/pr-lifecycle) must
-    # refuse `version-update:semver-major` — fetch-metadata reports a group's
-    # highest update-type — so a group containing a major stays held for review.
+    # Minor and patch action bumps batch into one PR; every major opens as its
+    # own PR (like the npm catch-alls above), so a pending major never holds
+    # routine bumps back from merging.
     groups:
       github-actions:
         patterns:
           - "*"
+        update-types:
+          - "minor"
+          - "patch"
