@@ -90,8 +90,9 @@ updates:
         # eslint major; prettier plugins (e.g. prettier-plugin-tailwindcss) track
         # prettier. Unlike the dev-only families above, no update-types filter,
         # so a major brings its family with it and a minor/patch never falls
-        # through to the dev catch-all. (eslint-plugin-storybook matches the
-        # `storybook` group above first.)
+        # through to the dev catch-all. eslint-plugin-storybook is excluded: a
+        # major matches the `storybook` group above first, and a minor/patch
+        # falls through to the dev catch-all alongside storybook and @storybook/*.
         patterns:
           - "eslint"
           - "eslint-*"
@@ -99,6 +100,8 @@ updates:
           - "typescript-eslint"
           - "prettier"
           - "prettier-plugin-*"
+        exclude-patterns:
+          - "eslint-plugin-storybook"
       tailwind:
         # tailwindcss core + its postcss plugin ship in lockstep. All dev, so
         # group majors only. (prettier-plugin-tailwindcss matches `ci` above.)
