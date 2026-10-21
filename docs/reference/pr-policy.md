@@ -34,6 +34,11 @@ status keeps the merge gate working when GitHub supersedes the check suite the c
 The action also posts one informational status per check (`pr-policy / title`,
 `pr-policy / uat`, …). All of these need the workflow's `statuses: write`.
 
+**The `status` trigger.** pr-policy gates UAT and CI sign-off on pr-lifecycle's
+`pr-lifecycle/sign-off` commit status once a head carries one, so the caller also re-runs on
+`status`, filtered to that context. This repo runs no pr-lifecycle caller yet, so no such status
+arrives and pr-policy keeps using its own classification (the exemptions above).
+
 ## Required checks
 
 `pr-policy` is the single context to require in the default-branch ruleset. Require it only once
