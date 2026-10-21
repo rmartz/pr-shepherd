@@ -36,9 +36,10 @@ The action also posts one informational status per check (`pr-policy / title`,
 
 **The `status` trigger.** pr-policy gates UAT and CI sign-off on pr-lifecycle's
 `pr-lifecycle/sign-off` commit status once a head carries one, so the caller also re-runs on
-`status`, filtered to that context. This repo runs
-[pr-lifecycle](pr-lifecycle.md) labels-only, which posts no such status yet, so
-pr-policy keeps using its own classification (the exemptions above).
+`status`, filtered to that context. [pr-lifecycle](pr-lifecycle.md) posts it as the
+`rmartz-pr-lifecycle` App, which the caller trusts through
+`sign-off-status-creators: rmartz-pr-lifecycle[bot]`. pr-policy falls back to its own
+classification (the exemptions above) only while a head has no status.
 
 ## Required checks
 
