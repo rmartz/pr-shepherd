@@ -37,9 +37,14 @@ The action also posts one informational status per check (`pr-policy / title`,
 **The `status` trigger.** pr-policy gates UAT and CI sign-off on pr-lifecycle's
 `pr-lifecycle/sign-off` commit status once a head carries one, so the caller also re-runs on
 `status`, filtered to that context. [pr-lifecycle](pr-lifecycle.md) posts it as the
-`rmartz-pr-lifecycle` App, which the caller trusts through
-`sign-off-status-creators: rmartz-pr-lifecycle[bot]`. pr-policy falls back to its own
-classification (the exemptions above) only while a head has no status.
+`rmartz-pr-lifecycle` App, which the caller trusts by default
+(`sign-off-status-creators`). pr-policy falls back to its own classification (the exemptions above) only
+while a head has no status.
+
+**The UAT label is required.** With `require-uat-label: true`, pr-policy holds a PR
+that carries no UAT label, so every merge has an explicit UAT determination.
+pr-lifecycle writes that label with `GITHUB_TOKEN`, which starts no `labeled` run, so
+the caller also re-runs when the `pr-lifecycle` workflow completes (`workflow_run`).
 
 ## Required checks
 
