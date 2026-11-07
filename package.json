@@ -64,7 +64,7 @@
     "@vitest/browser-playwright": "^5.0.5",
     "eslint": "^10.14.0",
     "eslint-import-resolver-typescript": "^4.4.5",
-    "eslint-plugin-boundaries": "^7.4.0",
+    "eslint-plugin-boundaries": "^7.4.1",
     "eslint-plugin-react-hooks": "^7.1.1",
     "eslint-plugin-storybook": "^10.6.5",
     "globals": "^17.13.0",
