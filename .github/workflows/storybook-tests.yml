@@ -37,4 +37,4 @@ permissions:
 
 jobs:
   storybook-tests:
-    uses: rmartz/storybook-ci/.github/workflows/storybook-tests.yml@1c03f5ef224d6f008d2b3c3bb87a536bcac3ecdb # v1.5.3
+    uses: rmartz/storybook-ci/.github/workflows/storybook-tests.yml@652cb863dd5fca4df6cdc56b0ccc698efb7b80e6 # v2.0.2
