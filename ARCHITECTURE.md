@@ -6,7 +6,7 @@ This document captures non-business-logic technical decisions, patterns, and inf
 
 | Layer           | Technology                                    | Purpose                                                  |
 | --------------- | --------------------------------------------- | -------------------------------------------------------- |
-| Runtime         | Node.js 24 LTS                                | Ships everywhere; first-class `child_process` for Claude |
+| Runtime         | Node.js 26 LTS                                | Ships everywhere; first-class `child_process` for Claude |
 | Language        | TypeScript (strict mode)                      | Schema safety across DB ↔ engine ↔ API boundary          |
 | Package Manager | pnpm                                          | Fast, disk-efficient dependency management               |
 | Data store      | Firestore (hosted/emulator) or RxDB + LevelDB | Adapter-agnostic; configured per `config.yaml`           |
