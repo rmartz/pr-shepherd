@@ -7,6 +7,9 @@
   "bin": {
     "shepherd": "src/cli/shepherd.ts"
   },
+  "engines": {
+    "node": "26.x"
+  },
   "packageManager": "pnpm@10.30.3",
   "scripts": {
     "dev": "next dev",
