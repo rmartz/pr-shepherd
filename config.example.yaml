@@ -77,6 +77,5 @@ commands:
   collectionPath: commands # Firestore collection the daemon watches for UI-issued commands
   pollIntervalSeconds: 5 # not used when adapter is firebase-hosted (onSnapshot is push); applies to leveldb adapter only
 
-
 # There is no `server` block: the daemon does **not** host an HTTP server.
 # The UI runs on Vercel as a standard Next.js deployment.
