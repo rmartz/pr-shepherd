@@ -13,7 +13,7 @@ See [ARCHITECTURE.md](../ARCHITECTURE.md) for the deployment topology and [visio
 
 ## Prerequisites
 
-- Node.js 24+ (the project's pinned LTS)
+- Node.js 26 (the project's pinned LTS, set by `engines` in `package.json` and `.nvmrc`)
 - `pnpm` (see [CLAUDE.md](../CLAUDE.md))
 - Java JDK 11+ (the Firebase Emulator Suite is a Java app)
 - `firebase-tools` CLI: `npm install -g firebase-tools` (or `pnpm add -g firebase-tools`)

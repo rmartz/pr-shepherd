@@ -10,7 +10,7 @@ For the full design rationale and architecture details, see the [vision document
 
 | Layer           | Technology                                                                                                              | Purpose                                                  |
 | --------------- | ----------------------------------------------------------------------------------------------------------------------- | -------------------------------------------------------- |
-| Runtime         | [Node.js](https://nodejs.org/) 24 LTS                                                                                   | First-class `child_process` for the Claude CLI           |
+| Runtime         | [Node.js](https://nodejs.org/) 26 LTS                                                                                   | First-class `child_process` for the Claude CLI           |
 | Language        | TypeScript (strict mode)                                                                                                | Schema safety across DB ↔ engine ↔ API boundary          |
 | Package Manager | [pnpm](https://pnpm.io/)                                                                                                | Fast, disk-efficient dependency management               |
 | Data store      | Hosted Firestore (default), Firebase Emulator, or RxDB + LevelDB                                                        | Adapter-agnostic; chosen per `config.yaml`               |
@@ -28,7 +28,7 @@ For the full design rationale and architecture details, see the [vision document
 
 ### Prerequisites
 
-- [Node.js](https://nodejs.org/) v24+
+- [Node.js](https://nodejs.org/) v26 (pinned by `engines` in `package.json` and `.nvmrc`)
 - [pnpm](https://pnpm.io/) v10+
 - A [Firebase project](https://console.firebase.google.com/) with Firestore enabled — the default data-store adapter. Alternatives are documented in [ARCHITECTURE.md](ARCHITECTURE.md#data-store).
 - A GitHub personal access token authorized via the [`gh` CLI](https://cli.github.com/) for the repos the daemon will watch.

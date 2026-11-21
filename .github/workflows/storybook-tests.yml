@@ -38,3 +38,5 @@ permissions:
 jobs:
   storybook-tests:
     uses: rmartz/storybook-ci/.github/workflows/storybook-tests.yml@1c03f5ef224d6f008d2b3c3bb87a536bcac3ecdb # v1.5.3
+    with:
+      node-version: 26.x
